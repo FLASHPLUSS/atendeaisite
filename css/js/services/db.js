@@ -1,0 +1,116 @@
+import pg from 'pg';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const { Pool } = pg;
+const currentFile = fileURLToPath(import.meta.url);
+const projectRoot = path.resolve(path.dirname(currentFile), '..', '..', '..');
+
+export async function loadEnv() {
+  try {
+    const content = await fs.readFile(path.join(projectRoot, '.env'), 'utf8');
+    content.split(/\r?\n/).forEach((line) => {
+      const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (match && !process.env[match[1]]) process.env[match[1]] = match[2].replace(/^['"]|['"]$/g, '');
+    });
+  } catch {
+    // Variáveis também podem vir do ambiente do EasyPanel.
+  }
+}
+
+await loadEnv();
+
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: Number(process.env.DB_POOL_MAX || 10),
+  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
+});
+
+export async function migrate() {
+  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL não configurada no arquivo .env.');
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS restaurants (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      phone TEXT,
+      address TEXT,
+      logo_data TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS restaurant_settings (
+      restaurant_id BIGINT PRIMARY KEY REFERENCES restaurants(id) ON DELETE CASCADE,
+      profile JSONB NOT NULL DEFAULT '{}'::jsonb,
+      agent JSONB NOT NULL DEFAULT '{}'::jsonb,
+      theme TEXT NOT NULL DEFAULT 'dark',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS menu_items (
+      id BIGSERIAL PRIMARY KEY,
+      restaurant_id BIGINT NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      price NUMERIC(12, 2) NOT NULL DEFAULT 0,
+      category TEXT NOT NULL DEFAULT 'Pratos principais',
+      image_data TEXT,
+      available BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS menu_items_restaurant_idx ON menu_items (restaurant_id, updated_at DESC);
+  `);
+}
+
+export async function getRestaurant() {
+  const result = await pool.query('SELECT * FROM restaurants ORDER BY id LIMIT 1');
+  if (result.rows[0]) return result.rows[0];
+  const created = await pool.query('INSERT INTO restaurants (name) VALUES ($1) RETURNING *', ['Meu restaurante']);
+  await pool.query('INSERT INTO restaurant_settings (restaurant_id) VALUES ($1) ON CONFLICT DO NOTHING', [created.rows[0].id]);
+  return created.rows[0];
+}
+
+export async function listMenu() {
+  const restaurant = await getRestaurant();
+  const result = await pool.query('SELECT * FROM menu_items WHERE restaurant_id = $1 ORDER BY updated_at DESC, id DESC', [restaurant.id]);
+  return { restaurant, items: result.rows };
+}
+
+export async function updateSettings(payload) {
+  const restaurant = await getRestaurant();
+  const { name, phone, address, logoData, profile, agent, theme } = payload;
+  const updated = await pool.query(
+    'UPDATE restaurants SET name = COALESCE($1, name), phone = COALESCE($2, phone), address = COALESCE($3, address), logo_data = COALESCE($4, logo_data), updated_at = NOW() WHERE id = $5 RETURNING *',
+    [name, phone, address, logoData, restaurant.id],
+  );
+  await pool.query(
+    `INSERT INTO restaurant_settings (restaurant_id, profile, agent, theme, updated_at) VALUES ($1, $2, $3, COALESCE($4, 'dark'), NOW())
+     ON CONFLICT (restaurant_id) DO UPDATE SET profile = COALESCE($2, restaurant_settings.profile), agent = COALESCE($3, restaurant_settings.agent), theme = COALESCE($4, restaurant_settings.theme), updated_at = NOW()`,
+    [restaurant.id, profile || null, agent || null, theme || null],
+  );
+  return updated.rows[0];
+}
+
+export async function createMenuItem(payload) {
+  const restaurant = await getRestaurant();
+  const result = await pool.query(
+    'INSERT INTO menu_items (restaurant_id, name, description, price, category, image_data, available) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+    [restaurant.id, payload.name, payload.description || '', Number(payload.price || 0), payload.category || 'Pratos principais', payload.imageData || null, payload.available !== false],
+  );
+  return result.rows[0];
+}
+
+export async function updateMenuItem(id, payload) {
+  const restaurant = await getRestaurant();
+  const result = await pool.query(
+    `UPDATE menu_items SET name = COALESCE($1, name), description = COALESCE($2, description), price = COALESCE($3, price), category = COALESCE($4, category), image_data = COALESCE($5, image_data), available = COALESCE($6, available), updated_at = NOW() WHERE id = $7 AND restaurant_id = $8 RETURNING *`,
+    [payload.name, payload.description, payload.price == null ? null : Number(payload.price), payload.category, payload.imageData, payload.available, id, restaurant.id],
+  );
+  return result.rows[0] || null;
+}
+
+export async function deleteMenuItem(id) {
+  const restaurant = await getRestaurant();
+  const result = await pool.query('DELETE FROM menu_items WHERE id = $1 AND restaurant_id = $2 RETURNING *', [id, restaurant.id]);
+  return result.rows[0] || null;
+}
