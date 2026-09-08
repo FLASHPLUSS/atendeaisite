@@ -21,7 +21,10 @@ function setDrawer(open) {
   const overlay = document.querySelector('#drawer-overlay');
   const openButton = document.querySelector('#open-drawer');
   if (!drawer || !overlay) return;
+  const shell = drawer.closest('.app-shell');
   drawer.classList.toggle('is-open', open);
+  drawer.classList.toggle('is-closed', !open);
+  shell?.classList.toggle('drawer-collapsed', !open);
   overlay.classList.toggle('is-visible', open);
   drawer.setAttribute('aria-hidden', String(!open && window.innerWidth <= 980));
   openButton?.setAttribute('aria-expanded', String(open));
@@ -35,11 +38,15 @@ function bindView() {
   const closeButton = document.querySelector('#close-drawer');
   const navLinks = document.querySelectorAll('.nav-item');
 
-  setDrawer(false);
+  setDrawer(window.innerWidth > 980);
 
   openButton?.addEventListener('click', () => setDrawer(true));
   closeButton?.addEventListener('click', () => setDrawer(false));
   overlay?.addEventListener('click', () => setDrawer(false));
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 980 && !drawer.classList.contains('is-open')) setDrawer(true);
+    if (window.innerWidth <= 980 && drawer.classList.contains('is-open')) setDrawer(false);
+  });
   navLinks.forEach((link) => link.addEventListener('click', () => {
     if (window.innerWidth <= 980) setDrawer(false);
   }));
