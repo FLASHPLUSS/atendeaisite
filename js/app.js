@@ -118,7 +118,8 @@ function clearDemoContent() {
 
 function menuItemMarkup(item) {
   const initials = item.name.split(/\s+/).map((word) => word[0]).join('').slice(0, 2).toUpperCase();
-  const visual = item.image_data ? `<img src="${escapeHtml(item.image_data)}" alt="" />` : `<span>${escapeHtml(initials)}</span><i data-lucide="utensils"></i>`;
+  const imageSource = item.image_data || item.imageData || '';
+  const visual = imageSource.startsWith('data:image/') ? `<img src="${escapeHtml(imageSource)}" alt="Foto de ${escapeHtml(item.name)}" />` : `<span>${escapeHtml(initials)}</span><i data-lucide="utensils"></i>`;
   return `<article class="menu-item${item.available ? '' : ' menu-item--paused'}"><div class="menu-item__visual menu-item__visual--green">${visual}</div><div class="menu-item__body"><div class="menu-item__title"><h2>${escapeHtml(item.name)}</h2><button class="more-button" type="button" aria-label="Opções do item"><i data-lucide="more-horizontal"></i></button></div><p>${escapeHtml(item.description)}</p><div class="menu-item__footer"><strong>R$ ${Number(item.price).toFixed(2).replace('.', ',')}</strong><span class="availability"><i></i> ${item.available ? 'Disponível' : 'Indisponível'}</span></div></div></article>`;
 }
 
@@ -141,10 +142,17 @@ function openMenuItemDialog(grid) {
   if (document.querySelector('#menu-item-dialog')) return;
   const dialog = document.createElement('dialog');
   dialog.id = 'menu-item-dialog';
-  dialog.innerHTML = `<form method="dialog" class="menu-dialog-form"><div class="panel__header"><div><h2>Novo item do cardápio</h2><p>Salve o prato e a foto diretamente no banco de dados.</p></div><button class="icon-button" value="cancel" aria-label="Fechar"><i data-lucide="x"></i></button></div><label>Nome do prato<input name="name" required maxlength="120" /></label><label>Descrição<textarea name="description" maxlength="500"></textarea></label><div class="menu-dialog-form__row"><label>Preço<input name="price" type="number" min="0" step="0.01" required /></label><label>Categoria<select name="category"><option>Entradas</option><option selected>Pratos principais</option><option>Bebidas</option><option>Sobremesas</option></select></label></div><label>Foto do prato<input name="image" type="file" accept="image/png,image/jpeg,image/webp" /></label><div class="menu-dialog-form__actions"><button class="filter-button" value="cancel">Cancelar</button><button class="menu-action" value="default">Salvar item</button></div></form>`;
+  dialog.innerHTML = `<form method="dialog" class="menu-dialog-form"><div class="panel__header"><div><h2>Novo item do cardápio</h2><p>A foto escolhida aqui será salva somente neste prato.</p></div><button class="icon-button" value="cancel" aria-label="Fechar"><i data-lucide="x"></i></button></div><label>Nome do prato<input name="name" required maxlength="120" /></label><label>Descrição<textarea name="description" maxlength="500"></textarea></label><div class="menu-dialog-form__row"><label>Preço<input name="price" type="number" min="0" step="0.01" required /></label><label>Categoria<select name="category"><option>Entradas</option><option selected>Pratos principais</option><option>Bebidas</option><option>Sobremesas</option></select></label></div><label>Foto deste prato<input name="image" type="file" accept="image/png,image/jpeg,image/webp" /><img class="menu-dialog-form__preview" alt="Prévia da foto do prato" hidden /></label><div class="menu-dialog-form__actions"><button class="filter-button" value="cancel">Cancelar</button><button class="menu-action" value="default">Salvar item</button></div></form>`;
   document.body.append(dialog);
   lucide.createIcons();
   dialog.addEventListener('close', () => dialog.remove());
+  dialog.querySelector('input[name="image"]').addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    const preview = dialog.querySelector('.menu-dialog-form__preview');
+    if (!file) { preview.hidden = true; preview.removeAttribute('src'); return; }
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false;
+  });
   dialog.querySelector('form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
