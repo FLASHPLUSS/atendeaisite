@@ -20,10 +20,11 @@ function setDrawer(open) {
   const drawer = document.querySelector('#drawer');
   const overlay = document.querySelector('#drawer-overlay');
   const openButton = document.querySelector('#open-drawer');
-  if (!drawer || !overlay || !openButton) return;
+  if (!drawer || !overlay) return;
   drawer.classList.toggle('is-open', open);
   overlay.classList.toggle('is-visible', open);
-  openButton.setAttribute('aria-expanded', String(open));
+  drawer.setAttribute('aria-hidden', String(!open && window.innerWidth <= 980));
+  openButton?.setAttribute('aria-expanded', String(open));
   document.body.style.overflow = open ? 'hidden' : '';
 }
 
@@ -33,6 +34,8 @@ function bindView() {
   const openButton = document.querySelector('#open-drawer');
   const closeButton = document.querySelector('#close-drawer');
   const navLinks = document.querySelectorAll('.nav-item');
+
+  setDrawer(false);
 
   openButton?.addEventListener('click', () => setDrawer(true));
   closeButton?.addEventListener('click', () => setDrawer(false));
