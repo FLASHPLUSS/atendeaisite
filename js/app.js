@@ -5,11 +5,12 @@ import { configuracoesView } from '../css/js/views/configuracoes.js';
 import { relatoriosView } from '../css/js/views/relatorios.js';
 import { agenteIaView } from '../css/js/views/agente-ia.js';
 import { connectWhatsApp, disconnectWhatsApp, getConnectionState } from '../css/js/services/evolution-api.js';
-import { connectRealtime, createMenuItem, getMenuItems, updateRestaurantSettings } from '../css/js/services/data-api.js';
+import { connectRealtime, createMenuItem, deleteMenuItem, getMenuItems, updateMenuItem, updateRestaurantSettings } from '../css/js/services/data-api.js';
 
 const app = document.querySelector('#app');
 const routes = { inicio: dashboardView, pedidos: pedidosView, cardapio: cardapioView, relatorios: relatoriosView, configuracoes: configuracoesView, 'agente-ia': agenteIaView };
 let realtimeSocket;
+const menuItemsById = new Map();
 
 function currentRoute() {
   return window.location.hash.replace('#', '') || 'inicio';
@@ -117,10 +118,25 @@ function clearDemoContent() {
 }
 
 function menuItemMarkup(item) {
+  menuItemsById.set(String(item.id), item);
   const initials = item.name.split(/\s+/).map((word) => word[0]).join('').slice(0, 2).toUpperCase();
   const imageSource = item.image_data || item.imageData || '';
   const visual = imageSource.startsWith('data:image/') ? `<img src="${escapeHtml(imageSource)}" alt="Foto de ${escapeHtml(item.name)}" />` : `<span>${escapeHtml(initials)}</span><i data-lucide="utensils"></i>`;
-  return `<article class="menu-item${item.available ? '' : ' menu-item--paused'}"><div class="menu-item__visual menu-item__visual--green">${visual}</div><div class="menu-item__body"><div class="menu-item__title"><h2>${escapeHtml(item.name)}</h2><button class="more-button" type="button" aria-label="Opções do item"><i data-lucide="more-horizontal"></i></button></div><p>${escapeHtml(item.description)}</p><div class="menu-item__footer"><strong>R$ ${Number(item.price).toFixed(2).replace('.', ',')}</strong><span class="availability"><i></i> ${item.available ? 'Disponível' : 'Indisponível'}</span></div></div></article>`;
+  const hasPromotion = item.promotion_active && Number(item.original_price) > Number(item.price);
+  const price = `<div class="menu-price">${hasPromotion ? `<del>R$ ${Number(item.original_price).toFixed(2).replace('.', ',')}</del>` : ''}<strong>R$ ${Number(item.price).toFixed(2).replace('.', ',')}</strong>${hasPromotion && item.discount_percent ? `<b>-${Number(item.discount_percent).toFixed(0)}%</b>` : ''}</div>`;
+  const badge = hasPromotion ? `<span class="menu-promo-badge"><i data-lucide="sparkles"></i>${escapeHtml(item.promotion_label || 'Oferta')}</span>` : '';
+  return `<article class="menu-item${item.available ? '' : ' menu-item--paused'}" data-menu-id="${escapeHtml(item.id)}"><div class="menu-item__visual menu-item__visual--green">${visual}${badge}</div><div class="menu-item__body"><div class="menu-item__title"><h2>${escapeHtml(item.name)}</h2><button class="more-button" type="button" data-menu-action="open" aria-label="Opções de ${escapeHtml(item.name)}"><i data-lucide="more-horizontal"></i></button></div><p>${escapeHtml(item.description)}</p><div class="menu-item__footer">${price}<span class="availability"><i></i> ${item.available ? 'Disponível' : 'Suspenso'}</span></div></div></article>`;
+}
+
+function renderMenuItems(grid, items) {
+  menuItemsById.clear();
+  grid.innerHTML = items.length ? items.map(menuItemMarkup).join('') : emptyState('Nenhum item no cardápio', 'Adicione um prato para começar a montar seu cardápio.');
+  lucide.createIcons();
+}
+
+async function refreshMenu(grid) {
+  const { items } = await getMenuItems();
+  renderMenuItems(grid, items);
 }
 
 function bindCardapio() {
@@ -128,25 +144,60 @@ function bindCardapio() {
   const grid = page?.querySelector('.menu-grid');
   if (!page || !grid || page.dataset.bound === 'true') return;
   page.dataset.bound = 'true';
-  grid.innerHTML = emptyState('Nenhum item no cardápio', 'Adicione um prato para começar a montar seu cardápio.');
+  grid.innerHTML = emptyState('Carregando cardápio', 'Buscando produtos salvos no banco de dados.');
   getMenuItems().then(({ items }) => {
-    if (items.length) grid.innerHTML = items.map(menuItemMarkup).join('');
+    renderMenuItems(grid, items);
     page.querySelector('.menu-action')?.addEventListener('click', () => openMenuItemDialog(grid));
+    grid.addEventListener('click', (event) => {
+      const actionButton = event.target.closest('[data-menu-action="open"]');
+      if (!actionButton) return;
+      const item = menuItemsById.get(actionButton.closest('[data-menu-id]').dataset.menuId);
+      if (item) openMenuActions(grid, item);
+    });
     lucide.createIcons();
   }).catch(() => {
     page.querySelector('.menu-action')?.addEventListener('click', () => openMenuItemDialog(grid));
   });
 }
 
-function openMenuItemDialog(grid) {
+function openMenuActions(grid, item) {
+  document.querySelector('.menu-item-actions')?.remove();
+  const card = grid.querySelector(`[data-menu-id="${CSS.escape(String(item.id))}"]`);
+  if (!card) return;
+  const actions = document.createElement('div');
+  actions.className = 'menu-item-actions';
+  actions.innerHTML = `<button type="button" data-menu-command="edit"><i data-lucide="pencil"></i> Editar</button><button type="button" data-menu-command="promotion"><i data-lucide="badge-percent"></i> ${item.promotion_active ? 'Editar promoção' : 'Criar promoção'}</button><button type="button" data-menu-command="toggle"><i data-lucide="${item.available ? 'pause-circle' : 'play-circle'}"></i> ${item.available ? 'Suspender' : 'Reativar'}</button><button type="button" class="menu-item-actions__danger" data-menu-command="delete"><i data-lucide="trash-2"></i> Excluir</button>`;
+  card.append(actions);
+  lucide.createIcons();
+  actions.addEventListener('click', async (event) => {
+    const command = event.target.closest('[data-menu-command]')?.dataset.menuCommand;
+    if (!command) return;
+    actions.remove();
+    if (command === 'edit' || command === 'promotion') return openMenuItemDialog(grid, item, command === 'promotion');
+    if (command === 'delete') {
+      if (window.confirm(`Excluir ${item.name}? Esta ação não pode ser desfeita.`)) { await deleteMenuItem(item.id); await refreshMenu(grid); }
+      return;
+    }
+    await updateMenuItem(item.id, { available: !item.available });
+    await refreshMenu(grid);
+  });
+}
+
+function openMenuItemDialog(grid, item = null, promotionOnly = false) {
   if (document.querySelector('#menu-item-dialog')) return;
   const dialog = document.createElement('dialog');
   dialog.id = 'menu-item-dialog';
-  dialog.innerHTML = `<form method="dialog" class="menu-dialog-form"><div class="panel__header"><div><h2>Novo item do cardápio</h2><p>A foto escolhida aqui será salva somente neste prato.</p></div><button class="icon-button" value="cancel" aria-label="Fechar"><i data-lucide="x"></i></button></div><label>Nome do prato<input name="name" required maxlength="120" /></label><label>Descrição<textarea name="description" maxlength="500"></textarea></label><div class="menu-dialog-form__row"><label>Preço<input name="price" type="number" min="0" step="0.01" required /></label><label>Categoria<select name="category"><option>Entradas</option><option selected>Pratos principais</option><option>Bebidas</option><option>Sobremesas</option></select></label></div><label>Foto deste prato<input name="image" type="file" accept="image/png,image/jpeg,image/webp" /><img class="menu-dialog-form__preview" alt="Prévia da foto do prato" hidden /></label><div class="menu-dialog-form__actions"><button class="filter-button" value="cancel">Cancelar</button><button class="menu-action" value="default">Salvar item</button></div></form>`;
+  const current = item || {};
+  dialog.innerHTML = `<form method="dialog" class="menu-dialog-form"><div class="panel__header"><div><h2>${item ? (promotionOnly ? 'Promoção do produto' : 'Editar produto') : 'Novo item do cardápio'}</h2><p>A foto escolhida aqui será salva somente neste prato.</p></div><button class="icon-button" value="cancel" aria-label="Fechar"><i data-lucide="x"></i></button></div><label class="${promotionOnly ? 'menu-dialog-form__hidden' : ''}">Nome do prato<input name="name" required maxlength="120" value="${escapeHtml(current.name || '')}" /></label><label class="${promotionOnly ? 'menu-dialog-form__hidden' : ''}">Descrição<textarea name="description" maxlength="500">${escapeHtml(current.description || '')}</textarea></label><div class="menu-dialog-form__row ${promotionOnly ? 'menu-dialog-form__hidden' : ''}"><label>Preço de venda<input name="price" type="number" min="0" step="0.01" required value="${current.price ?? ''}" /></label><label>Categoria<select name="category"><option ${current.category === 'Entradas' ? 'selected' : ''}>Entradas</option><option ${!current.category || current.category === 'Pratos principais' ? 'selected' : ''}>Pratos principais</option><option ${current.category === 'Bebidas' ? 'selected' : ''}>Bebidas</option><option ${current.category === 'Sobremesas' ? 'selected' : ''}>Sobremesas</option></select></label></div><label class="${promotionOnly ? 'menu-dialog-form__hidden' : ''}">Foto deste prato<input name="image" type="file" accept="image/png,image/jpeg,image/webp" /><img class="menu-dialog-form__preview" alt="Prévia da foto do prato" hidden /></label><label class="menu-promotion-toggle"><input name="promotionActive" type="checkbox" ${current.promotion_active ? 'checked' : ''} /> Ativar promoção</label><div class="menu-dialog-form__row menu-promotion-fields"><label>Preço antigo<input name="originalPrice" type="number" min="0" step="0.01" value="${current.original_price ?? ''}" /></label><label>Desconto (%)<input name="discountPercent" type="number" min="1" max="99" step="1" value="${current.discount_percent ?? ''}" /></label></div><label class="menu-promotion-fields">Etiqueta da promoção<input name="promotionLabel" maxlength="30" value="${escapeHtml(current.promotion_label || 'Oferta especial')}" placeholder="Ex.: Oferta especial" /></label><div class="menu-dialog-form__actions"><button class="filter-button" value="cancel">Cancelar</button><button class="menu-action" value="default">Salvar</button></div></form>`;
   document.body.append(dialog);
   lucide.createIcons();
   dialog.addEventListener('close', () => dialog.remove());
-  dialog.querySelector('input[name="image"]').addEventListener('change', (event) => {
+  const promotionToggle = dialog.querySelector('input[name="promotionActive"]');
+  const promotionFields = dialog.querySelectorAll('.menu-promotion-fields');
+  const syncPromotionFields = () => promotionFields.forEach((field) => { field.hidden = !promotionToggle.checked; });
+  promotionToggle.addEventListener('change', syncPromotionFields);
+  syncPromotionFields();
+  dialog.querySelector('input[name="image"]')?.addEventListener('change', (event) => {
     const file = event.target.files[0];
     const preview = dialog.querySelector('.menu-dialog-form__preview');
     if (!file) { preview.hidden = true; preview.removeAttribute('src'); return; }
@@ -156,11 +207,12 @@ function openMenuItemDialog(grid) {
   dialog.querySelector('form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
-    const file = form.image.files[0];
+    const file = form.image?.files[0];
     const imageData = file ? await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }) : null;
-    const item = await createMenuItem({ name: form.name.value.trim(), description: form.description.value.trim(), price: form.price.value, category: form.category.value, imageData });
-    grid.insertAdjacentHTML('afterbegin', menuItemMarkup(item));
-    lucide.createIcons();
+    const payload = { name: form.name.value.trim(), description: form.description.value.trim(), price: form.price.value, category: form.category.value, imageData, available: item?.available ?? true, originalPrice: form.originalPrice.value || null, discountPercent: form.discountPercent.value || null, promotionLabel: form.promotionLabel.value.trim() || null, promotionActive: form.promotionActive.checked };
+    if (item) await updateMenuItem(item.id, payload);
+    else await createMenuItem(payload);
+    await refreshMenu(grid);
     dialog.close();
   });
   dialog.showModal();

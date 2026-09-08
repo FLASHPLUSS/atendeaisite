@@ -55,9 +55,17 @@ export async function migrate() {
       category TEXT NOT NULL DEFAULT 'Pratos principais',
       image_data TEXT,
       available BOOLEAN NOT NULL DEFAULT TRUE,
+      original_price NUMERIC(12, 2),
+      discount_percent NUMERIC(5, 2),
+      promotion_label TEXT,
+      promotion_active BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS original_price NUMERIC(12, 2);
+    ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS discount_percent NUMERIC(5, 2);
+    ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS promotion_label TEXT;
+    ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS promotion_active BOOLEAN NOT NULL DEFAULT FALSE;
     CREATE INDEX IF NOT EXISTS menu_items_restaurant_idx ON menu_items (restaurant_id, updated_at DESC);
   `);
 }
@@ -94,8 +102,8 @@ export async function updateSettings(payload) {
 export async function createMenuItem(payload) {
   const restaurant = await getRestaurant();
   const result = await pool.query(
-    'INSERT INTO menu_items (restaurant_id, name, description, price, category, image_data, available) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-    [restaurant.id, payload.name, payload.description || '', Number(payload.price || 0), payload.category || 'Pratos principais', payload.imageData || null, payload.available !== false],
+    'INSERT INTO menu_items (restaurant_id, name, description, price, category, image_data, available, original_price, discount_percent, promotion_label, promotion_active) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *',
+    [restaurant.id, payload.name, payload.description || '', Number(payload.price || 0), payload.category || 'Pratos principais', payload.imageData || null, payload.available !== false, payload.originalPrice == null ? null : Number(payload.originalPrice), payload.discountPercent == null ? null : Number(payload.discountPercent), payload.promotionLabel || null, payload.promotionActive === true],
   );
   return result.rows[0];
 }
@@ -103,8 +111,8 @@ export async function createMenuItem(payload) {
 export async function updateMenuItem(id, payload) {
   const restaurant = await getRestaurant();
   const result = await pool.query(
-    `UPDATE menu_items SET name = COALESCE($1, name), description = COALESCE($2, description), price = COALESCE($3, price), category = COALESCE($4, category), image_data = COALESCE($5, image_data), available = COALESCE($6, available), updated_at = NOW() WHERE id = $7 AND restaurant_id = $8 RETURNING *`,
-    [payload.name, payload.description, payload.price == null ? null : Number(payload.price), payload.category, payload.imageData, payload.available, id, restaurant.id],
+    `UPDATE menu_items SET name = COALESCE($1, name), description = COALESCE($2, description), price = COALESCE($3, price), category = COALESCE($4, category), image_data = COALESCE($5, image_data), available = COALESCE($6, available), original_price = COALESCE($7, original_price), discount_percent = COALESCE($8, discount_percent), promotion_label = COALESCE($9, promotion_label), promotion_active = COALESCE($10, promotion_active), updated_at = NOW() WHERE id = $11 AND restaurant_id = $12 RETURNING *`,
+    [payload.name, payload.description, payload.price == null ? null : Number(payload.price), payload.category, payload.imageData, payload.available, payload.originalPrice == null ? null : Number(payload.originalPrice), payload.discountPercent == null ? null : Number(payload.discountPercent), payload.promotionLabel, payload.promotionActive, id, restaurant.id],
   );
   return result.rows[0] || null;
 }
