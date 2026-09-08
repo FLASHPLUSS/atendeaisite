@@ -67,7 +67,7 @@ svg { width: 18px; height: 18px; stroke-width: 1.8; }
 .profile { gap: 9px; padding: 17px 4px 0; border-top: 1px solid var(--sidebar-line); }
 .profile > svg { width: 16px; margin-left: auto; color: var(--sidebar-muted); }
 .main-content { width: 100%; min-height: 100vh; margin-left: 0; }
-.topbar { height: 78px; padding: 0 48px; border-bottom: 1px solid var(--line); background: rgba(13,23,21,.9); }
+.topbar { position: sticky; top: 0; z-index: 10; height: 78px; padding: 0 48px; border-bottom: 1px solid var(--line); background: rgba(6,18,13,.88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 .menu-trigger { display: grid; color: var(--ink); }
 .breadcrumb { display: flex; align-items: center; gap: 9px; color: #a2aaa5; font-size: 12px; }
 .breadcrumb svg { width: 14px; }
