@@ -175,11 +175,37 @@ function openMenuActions(grid, item) {
     actions.remove();
     if (command === 'edit' || command === 'promotion') return openMenuItemDialog(grid, item, command === 'promotion');
     if (command === 'delete') {
-      if (window.confirm(`Excluir ${item.name}? Esta ação não pode ser desfeita.`)) { await deleteMenuItem(item.id); await refreshMenu(grid); }
+      const confirmed = await openDeleteDialog(item);
+      if (confirmed) { await deleteMenuItem(item.id); await refreshMenu(grid); }
       return;
     }
     await updateMenuItem(item.id, { available: !item.available });
     await refreshMenu(grid);
+  });
+}
+
+function openDeleteDialog(item) {
+  const existingDialog = document.querySelector('#delete-menu-dialog');
+  if (existingDialog) existingDialog.remove();
+  const dialog = document.createElement('dialog');
+  dialog.id = 'delete-menu-dialog';
+  dialog.innerHTML = `<div class="delete-dialog"><div class="delete-dialog__icon"><i data-lucide="trash-2"></i></div><div><h2>Excluir produto?</h2><p>Excluir <strong>${escapeHtml(item.name)}</strong>? Esta ação não pode ser desfeita.</p></div><div class="delete-dialog__actions"><button type="button" class="delete-dialog__cancel">Cancelar</button><button type="button" class="delete-dialog__confirm"><i data-lucide="trash-2"></i> Excluir</button></div></div>`;
+  document.body.append(dialog);
+  lucide.createIcons();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (confirmed) => {
+      if (settled) return;
+      settled = true;
+      dialog.close();
+      dialog.remove();
+      resolve(confirmed);
+    };
+    dialog.querySelector('.delete-dialog__cancel').addEventListener('click', () => finish(false));
+    dialog.querySelector('.delete-dialog__confirm').addEventListener('click', () => finish(true));
+    dialog.addEventListener('cancel', (event) => { event.preventDefault(); finish(false); });
+    dialog.addEventListener('close', () => finish(false));
+    dialog.showModal();
   });
 }
 
