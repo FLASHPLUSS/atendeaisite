@@ -153,7 +153,12 @@ async function serveStatic(request, response, url) {
   if (!filePath.startsWith(projectRoot)) return sendJson(response, 403, { message: 'Acesso negado.' });
   try {
     const file = await fs.readFile(filePath);
-    response.writeHead(200, { 'Content-Type': mimeTypes[path.extname(filePath)] || 'application/octet-stream' });
+    response.writeHead(200, {
+      'Content-Type': mimeTypes[path.extname(filePath)] || 'application/octet-stream',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
+    });
     response.end(file);
   } catch {
     sendJson(response, 404, { message: 'Arquivo não encontrado.' });
