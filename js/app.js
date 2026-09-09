@@ -6,7 +6,7 @@ import { configuracoesView } from '../css/js/views/configuracoes.js';
 import { relatoriosView } from '../css/js/views/relatorios.js';
 import { agenteIaView } from '../css/js/views/agente-ia.js';
 import { connectWhatsApp, disconnectWhatsApp, getConnectionState } from '../css/js/services/evolution-api.js';
-import { connectRealtime, createMenuItem, createPrintJob, deleteMenuItem, getMenuItems, getOrders, getPhysicalMenu, getRestaurantSettings, savePhysicalMenu, updateMenuItem, updateRestaurantSettings } from '../css/js/services/data-api.js';
+import { connectRealtime, createMenuItem, createPrintJob, deleteMenuItem, deletePrintJob, getMenuItems, getOrders, getPhysicalMenu, getRestaurantSettings, savePhysicalMenu, updateMenuItem, updatePrintJob, updateRestaurantSettings } from '../css/js/services/data-api.js';
 
 const app = document.querySelector('#app');
 const routes = { inicio: dashboardView, pedidos: pedidosView, loja: lojaView, cardapio: cardapioView, relatorios: relatoriosView, configuracoes: configuracoesView, 'agente-ia': agenteIaView };
@@ -64,6 +64,7 @@ function bindView() {
       const page = document.querySelector('.menu-page');
       if (page) { page.dataset.bound = 'false'; bindCardapio(); }
     }
+    if (event.type.startsWith('print-job.')) refreshOrders();
   });
 }
 
@@ -126,22 +127,51 @@ function bindOrders() {
   button.addEventListener('click', openOrderDialog);
   const panel = document.querySelector('.orders-table-panel');
   if (panel && !panel.querySelector('.orders-table')) panel.innerHTML = '<div class="orders-table"><div class="empty-state"><i data-lucide="loader-circle"></i><strong>Carregando pedidos</strong><span>Buscando os pedidos salvos no banco.</span></div></div>';
-  getOrders().then(({ orders }) => renderOrders(orders)).catch(() => {});
+  refreshOrders();
+}
+
+function refreshOrders() {
+  if (!document.querySelector('.orders-page')) return;
+  getOrders().then(({ orders }) => { window.orders = orders; renderOrders(orders); }).catch(() => {});
 }
 
 function renderOrders(orders) {
   const table = document.querySelector('.orders-table');
-  if (!table || !orders.length) return;
+  if (!table) return;
+  if (!orders.length) {
+    table.innerHTML = emptyState('Nenhum pedido registrado', 'Os pedidos criados pelo painel ou pelo WhatsApp aparecerão aqui.');
+    return;
+  }
   table.innerHTML = orders.map((order) => {
     const payload = order.payload || {};
     const items = Array.isArray(payload.items) ? payload.items : [];
     const total = Number(payload.total || 0).toFixed(2).replace('.', ',');
-    const status = order.status === 'printed' ? 'Impresso' : order.status === 'failed' ? 'Falhou' : order.status === 'printing' ? 'Imprimindo' : 'Na fila';
-    const statusClass = order.status === 'printed' ? 'status--ready' : order.status === 'failed' ? 'status--preparing' : 'status--paid';
-    return `<div class="table-order"><span class="table-order__id"><span class="order-icon order-icon--green"><i data-lucide="shopping-bag"></i></span><strong>#${escapeHtml(order.order_number)}</strong><small>${escapeHtml(payload.channel || 'Painel')} · ${escapeHtml(payload.customer || 'Cliente')}</small></span><span class="channel-label"><i data-lucide="printer"></i> ${escapeHtml(payload.channel || 'Painel')}</span><span>${items.length} ${items.length === 1 ? 'item' : 'itens'}</span><span>${new Date(order.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span><strong>R$ ${total}</strong><em class="status ${statusClass}">${status}</em></div>`;
+    const status = order.status === 'printed' ? 'Impresso' : order.status === 'failed' ? 'Falhou' : order.status === 'cancelled' ? 'Cancelado' : order.status === 'printing' ? 'Imprimindo' : 'Na fila';
+    const statusClass = order.status === 'printed' ? 'status--ready' : order.status === 'failed' || order.status === 'cancelled' ? 'status--preparing' : 'status--paid';
+    return `<div class="table-order" data-order-id="${order.id}"><span class="table-order__id"><span class="order-icon order-icon--green"><i data-lucide="shopping-bag"></i></span><strong>#${escapeHtml(order.order_number)}</strong><small>${escapeHtml(payload.channel || 'Painel')} · ${escapeHtml(payload.customer || 'Cliente')}</small></span><span class="channel-label"><i data-lucide="printer"></i> ${escapeHtml(payload.channel || 'Painel')}</span><span>${items.length} ${items.length === 1 ? 'item' : 'itens'}</span><span>${new Date(order.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span><strong>R$ ${total}</strong><em class="status ${statusClass}">${status}</em><span class="order-actions"><button type="button" data-order-action="details" aria-label="Ver detalhes"><i data-lucide="eye"></i></button><button type="button" data-order-action="reprint" aria-label="Reimprimir"><i data-lucide="printer"></i></button><button type="button" data-order-action="delete" aria-label="Excluir pedido"><i data-lucide="trash-2"></i></button></span></div>`;
   }).join('');
   document.querySelector('.orders-page__intro .subtitle').textContent = `${orders.length} pedido${orders.length === 1 ? '' : 's'} registrado${orders.length === 1 ? '' : 's'} na operação.`;
   lucide.createIcons();
+  bindOrderActions(table);
+}
+
+function bindOrderActions(table) {
+  table.querySelectorAll('.table-order').forEach((row) => {
+    const order = window.orders?.find((item) => String(item.id) === row.dataset.orderId);
+    if (!order) return;
+    row.querySelector('[data-order-action="details"]').addEventListener('click', () => {
+      const payload = order.payload || {};
+      openActionDialog({ title: `Pedido ${order.order_number}`, message: `${payload.customer || 'Cliente'} · ${payload.items?.map((item) => `${item.quantity}x ${item.name}`).join(', ') || 'Sem itens'} · Total R$ ${Number(payload.total || 0).toFixed(2).replace('.', ',')}`, confirmLabel: 'Fechar' });
+    });
+    row.querySelector('[data-order-action="reprint"]').addEventListener('click', async () => {
+      await updatePrintJob(order.id, 'pending');
+      refreshOrders();
+    });
+    row.querySelector('[data-order-action="delete"]').addEventListener('click', async () => {
+      const confirmed = await openActionDialog({ title: 'Excluir pedido?', message: `O pedido ${order.order_number} será removido do histórico.`, confirmLabel: 'Excluir pedido', destructive: true });
+      if (confirmed) { await deletePrintJob(order.id); refreshOrders(); }
+    });
+  });
 }
 
 function openOrderDialog() {

@@ -75,6 +75,8 @@ export async function migrate() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       printed_at TIMESTAMPTZ
     );
+    ALTER TABLE print_jobs DROP CONSTRAINT IF EXISTS print_jobs_status_check;
+    ALTER TABLE print_jobs ADD CONSTRAINT print_jobs_status_check CHECK (status IN ('pending', 'printing', 'printed', 'failed', 'cancelled'));
     CREATE INDEX IF NOT EXISTS print_jobs_queue_idx ON print_jobs (restaurant_id, status, created_at);
   `);
 }
@@ -176,11 +178,18 @@ export async function listPendingPrintJobs() {
 }
 
 export async function updatePrintJob(id, payload) {
+  const restaurant = await getRestaurant();
   const result = await pool.query(
     `UPDATE print_jobs SET status = $1, error_message = $2, printed_at = CASE WHEN $1 = 'printed' THEN NOW() ELSE printed_at END
-     WHERE id = $3 RETURNING *`,
-    [payload.status, payload.errorMessage || null, id],
+     WHERE id = $3 AND restaurant_id = $4 RETURNING *`,
+    [payload.status, payload.errorMessage || null, id, restaurant.id],
   );
+  return result.rows[0] || null;
+}
+
+export async function deletePrintJob(id) {
+  const restaurant = await getRestaurant();
+  const result = await pool.query('DELETE FROM print_jobs WHERE id = $1 AND restaurant_id = $2 RETURNING id', [id, restaurant.id]);
   return result.rows[0] || null;
 }
 

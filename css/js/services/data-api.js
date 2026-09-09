@@ -44,6 +44,14 @@ export function getRestaurantSettings() {
   return request('/api/settings');
 }
 
+export function updatePrintJob(id, status) {
+  return request(`/api/print-jobs/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+}
+
+export function deletePrintJob(id) {
+  return request(`/api/print-jobs/${id}`, { method: 'DELETE' });
+}
+
 export function updateRestaurantSettings(settings) {
   return request('/api/settings', { method: 'PUT', body: JSON.stringify(settings) });
 }

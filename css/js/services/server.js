@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRealtimeServer } from './websocket.js';
-import { createMenuItem, createPrintJob, deleteMenuItem, getPhysicalMenu, getRestaurant, listMenu, listOrders, listPendingPrintJobs, migrate, pool, savePhysicalMenu, updateMenuItem, updatePrintJob, updateSettings } from './db.js';
+import { createMenuItem, createPrintJob, deleteMenuItem, deletePrintJob, getPhysicalMenu, getRestaurant, listMenu, listOrders, listPendingPrintJobs, migrate, pool, savePhysicalMenu, updateMenuItem, updatePrintJob, updateSettings } from './db.js';
 
 const currentFile = fileURLToPath(import.meta.url);
 const servicesDirectory = path.dirname(currentFile);
@@ -108,9 +108,17 @@ async function handleApi(request, response, url) {
   if (printJobMatch && request.method === 'PATCH') {
     requireDatabase();
     const payload = await readJson(request);
-    if (!['printing', 'printed', 'failed'].includes(payload.status)) throw Object.assign(new Error('Status de impressão inválido.'), { status: 400 });
+    if (!['pending', 'printing', 'printed', 'failed', 'cancelled'].includes(payload.status)) throw Object.assign(new Error('Status de impressão inválido.'), { status: 400 });
     const job = await updatePrintJob(printJobMatch[1], payload);
     if (!job) return sendJson(response, 404, { message: 'Trabalho de impressão não encontrado.' });
+    realtime.broadcast('print-job.updated', job);
+    return sendJson(response, 200, job);
+  }
+  if (printJobMatch && request.method === 'DELETE') {
+    requireDatabase();
+    const job = await deletePrintJob(printJobMatch[1]);
+    if (!job) return sendJson(response, 404, { message: 'Pedido não encontrado.' });
+    realtime.broadcast('print-job.deleted', job);
     return sendJson(response, 200, job);
   }
   if (url.pathname === '/api/physical-menu' && request.method === 'GET') {
