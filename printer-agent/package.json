@@ -1,0 +1,9 @@
+{
+  "name": "atendeai-printer-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node agent.js",
+    "test-print": "node agent.js --test"
+  }
+}

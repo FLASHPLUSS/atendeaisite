@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRealtimeServer } from './websocket.js';
-import { createMenuItem, deleteMenuItem, getPhysicalMenu, getRestaurant, listMenu, migrate, pool, savePhysicalMenu, updateMenuItem, updateSettings } from './db.js';
+import { createMenuItem, createPrintJob, deleteMenuItem, getPhysicalMenu, getRestaurant, listMenu, listPendingPrintJobs, migrate, pool, savePhysicalMenu, updateMenuItem, updatePrintJob, updateSettings } from './db.js';
 
 const currentFile = fileURLToPath(import.meta.url);
 const servicesDirectory = path.dirname(currentFile);
@@ -89,6 +89,25 @@ async function handleApi(request, response, url) {
   if (url.pathname === '/api/menu' && request.method === 'GET') {
     requireDatabase();
     return sendJson(response, 200, await listMenu());
+  }
+  if (url.pathname === '/api/print-jobs' && request.method === 'GET') {
+    requireDatabase();
+    return sendJson(response, 200, { jobs: await listPendingPrintJobs() });
+  }
+  if (url.pathname === '/api/print-jobs' && request.method === 'POST') {
+    requireDatabase();
+    const job = await createPrintJob(await readJson(request));
+    realtime.broadcast('print-job.created', job);
+    return sendJson(response, 201, job);
+  }
+  const printJobMatch = url.pathname.match(/^\/api\/print-jobs\/(\d+)$/);
+  if (printJobMatch && request.method === 'PATCH') {
+    requireDatabase();
+    const payload = await readJson(request);
+    if (!['printing', 'printed', 'failed'].includes(payload.status)) throw Object.assign(new Error('Status de impressão inválido.'), { status: 400 });
+    const job = await updatePrintJob(printJobMatch[1], payload);
+    if (!job) return sendJson(response, 404, { message: 'Trabalho de impressão não encontrado.' });
+    return sendJson(response, 200, job);
   }
   if (url.pathname === '/api/physical-menu' && request.method === 'GET') {
     requireDatabase();

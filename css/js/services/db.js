@@ -63,6 +63,17 @@ export async function migrate() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS menu_items_restaurant_idx ON menu_items (restaurant_id, updated_at DESC);
+    CREATE TABLE IF NOT EXISTS print_jobs (
+      id BIGSERIAL PRIMARY KEY,
+      restaurant_id BIGINT NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      order_number TEXT NOT NULL,
+      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'printing', 'printed', 'failed')),
+      error_message TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      printed_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS print_jobs_queue_idx ON print_jobs (restaurant_id, status, created_at);
   `);
 }
 
@@ -140,4 +151,33 @@ export async function savePhysicalMenu(payload) {
     drinksMenuImage: result.rows[0].drinks_menu_image,
     updatedAt: result.rows[0].updated_at,
   };
+}
+
+export async function createPrintJob(payload) {
+  const restaurant = await getRestaurant();
+  const result = await pool.query(
+    'INSERT INTO print_jobs (restaurant_id, order_number, payload) VALUES ($1, $2, $3) RETURNING *',
+    [restaurant.id, String(payload.orderNumber || `TESTE-${Date.now()}`), payload.order || payload],
+  );
+  return result.rows[0];
+}
+
+export async function listPendingPrintJobs() {
+  const restaurant = await getRestaurant();
+  const result = await pool.query(
+    `UPDATE print_jobs SET status = 'printing'
+     WHERE id IN (SELECT id FROM print_jobs WHERE restaurant_id = $1 AND status = 'pending' ORDER BY created_at LIMIT 10)
+     RETURNING *`,
+    [restaurant.id],
+  );
+  return result.rows;
+}
+
+export async function updatePrintJob(id, payload) {
+  const result = await pool.query(
+    `UPDATE print_jobs SET status = $1, error_message = $2, printed_at = CASE WHEN $1 = 'printed' THEN NOW() ELSE printed_at END
+     WHERE id = $3 RETURNING *`,
+    [payload.status, payload.errorMessage || null, id],
+  );
+  return result.rows[0] || null;
 }
