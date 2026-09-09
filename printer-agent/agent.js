@@ -5,12 +5,15 @@ import { formatOrder } from './formatter.js';
 import { printEscPos } from './escpos.js';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
-const apiUrl = (process.env.ATENDEAI_API_URL || 'http://localhost:3000').replace(/\/$/, '');
-const mode = process.env.ATENDEAI_PRINT_MODE || 'virtual';
-const interval = Number(process.env.ATENDEAI_POLL_MS || 5000);
-const outputDirectory = path.join(directory, 'output');
-const printerHost = process.env.PRINTER_HOST || '';
-const printerPort = process.env.PRINTER_PORT || '9100';
+const runtimeDirectory = process.pkg ? path.dirname(process.execPath) : directory;
+let savedConfig = {};
+try { savedConfig = JSON.parse(await fs.readFile(path.join(runtimeDirectory, 'config.json'), 'utf8')); } catch { /* Usa variáveis de ambiente e padrões. */ }
+const apiUrl = (process.env.ATENDEAI_API_URL || savedConfig.apiUrl || 'http://localhost:3000').replace(/\/$/, '');
+const mode = process.env.ATENDEAI_PRINT_MODE || savedConfig.mode || 'virtual';
+const interval = Number(process.env.ATENDEAI_POLL_MS || savedConfig.pollSeconds * 1000 || 5000);
+const outputDirectory = path.join(runtimeDirectory, 'output');
+const printerHost = process.env.PRINTER_HOST || savedConfig.printerHost || '';
+const printerPort = process.env.PRINTER_PORT || savedConfig.printerPort || '9100';
 
 async function request(endpoint, options = {}) {
   const response = await fetch(`${apiUrl}${endpoint}`, {

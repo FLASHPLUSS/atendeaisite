@@ -22,7 +22,29 @@ O agente consulta `/api/print-jobs` a cada 5 segundos, processa os trabalhos e a
 
 ## Windows
 
-O processo pode ser executado com Node.js 22 LTS. Para uso contínuo, ele deve ser registrado no Agendador de Tarefas do Windows ou empacotado em um instalador `.exe` na próxima etapa.
+Para gerar o executável no Windows de desenvolvimento:
+
+```powershell
+Set-Location printer-agent
+npm.cmd install
+npm.cmd run build:windows
+Copy-Item config.sample.json dist/config.json
+```
+
+O arquivo será `printer-agent/dist/AtendeAI-Printer-Agent.exe`. Para instalar em outro computador, copie a pasta `dist` e rode o instalador como administrador:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\install-windows.ps1 -ApiUrl "https://seu-dominio.com" -Mode virtual
+```
+
+Para uma impressora ESC/POS de rede:
+
+```powershell
+.\install-windows.ps1 -ApiUrl "https://seu-dominio.com" -Mode escpos -PrinterHost "192.168.1.50" -PrinterPort 9100
+```
+
+O instalador copia o agente para `%LOCALAPPDATA%\AtendeAI\PrinterAgent`, cria a configuração e registra o início automático no Agendador de Tarefas do Windows.
 
 O modo físico será conectado por um adaptador ESC/POS, sem alterar a fila nem o formato dos pedidos.
 

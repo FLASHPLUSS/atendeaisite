@@ -1,0 +1,7 @@
+{
+  "apiUrl": "https://seu-dominio.com",
+  "mode": "virtual",
+  "pollSeconds": 5,
+  "printerHost": "",
+  "printerPort": 9100
+}
