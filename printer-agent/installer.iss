@@ -11,7 +11,7 @@ AppPublisher={#AppPublisher}
 DefaultDirName={localappdata}\AtendeAI\PrinterAgent
 DisableProgramGroupPage=yes
 OutputDir=dist\installer
-OutputBaseFilename=AtendeAI-Printer-Agent-Setup
+OutputBaseFilename=AtendeAI-Printer-Agent-Setup-v2
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -48,8 +48,8 @@ begin
   ModePage.Add('ESC/POS por rede');
   ModePage.SelectedValueIndex := 0;
 
-  PrinterPage := CreateInputQueryPage(ModePage.ID, 'Impressora ESC/POS', 'Dados da impressora de rede', 'Preencha se selecionou ESC/POS por rede.');
-  PrinterPage.Add('IP ou hostname:', False);
+  PrinterPage := CreateInputQueryPage(ModePage.ID, 'Impressora ESC/POS', 'Dados opcionais da impressora de rede', 'No modo virtual, deixe o IP vazio. Preencha somente para ESC/POS por rede.');
+  PrinterPage.Add('IP ou hostname (deixe vazio no modo virtual):', False);
   PrinterPage.Add('Porta:', False);
   PrinterPage.Add('Intervalo de busca (segundos):', False);
   PrinterPage.Values[1] := '9100';
