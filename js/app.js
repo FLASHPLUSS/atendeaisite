@@ -237,6 +237,13 @@ function bindMenuItemActions(grid) {
       card.classList.remove('menu-item--menu-open');
       const item = window.menuItems?.find((entry) => String(entry.id) === card.dataset.menuItemId);
       if (!item) return;
+      const confirmed = await openActionDialog({
+        title: item.available ? 'Suspender produto?' : 'Reativar produto?',
+        message: item.available ? `O produto "${item.name}" ficará indisponível para novos pedidos.` : `O produto "${item.name}" voltará a aparecer como disponível.`,
+        confirmLabel: item.available ? 'Suspender produto' : 'Reativar produto',
+        destructive: item.available,
+      });
+      if (!confirmed) return;
       const updated = await updateMenuItem(item.id, { available: !item.available });
       window.menuItems = window.menuItems.map((entry) => entry.id === updated.id ? updated : entry);
       card.outerHTML = menuItemMarkup(updated);
@@ -247,7 +254,14 @@ function bindMenuItemActions(grid) {
       actions.classList.remove('is-open');
       card.classList.remove('menu-item--menu-open');
       const item = window.menuItems?.find((entry) => String(entry.id) === card.dataset.menuItemId);
-      if (!item || !window.confirm(`Excluir o produto "${item.name}"?`)) return;
+      if (!item) return;
+      const confirmed = await openActionDialog({
+        title: 'Excluir produto?',
+        message: `O produto "${item.name}" será removido permanentemente da Loja.`,
+        confirmLabel: 'Excluir produto',
+        destructive: true,
+      });
+      if (!confirmed) return;
       await deleteMenuItem(item.id);
       window.menuItems = window.menuItems.filter((entry) => entry.id !== item.id);
       card.remove();
@@ -260,6 +274,29 @@ function bindMenuItemActions(grid) {
     });
     grid.dataset.outsideMenuBound = 'true';
   }
+}
+
+function openActionDialog({ title, message, confirmLabel, destructive = false }) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'action-dialog';
+    dialog.innerHTML = `<form method="dialog" class="action-dialog__form"><div class="action-dialog__icon${destructive ? ' action-dialog__icon--danger' : ''}"><i data-lucide="${destructive ? 'triangle-alert' : 'circle-help'}"></i></div><div class="action-dialog__content"><h2>${title}</h2><p>${message}</p></div><div class="action-dialog__actions"><button type="button" class="action-dialog__cancel">Cancelar</button><button type="submit" class="action-dialog__confirm${destructive ? ' action-dialog__confirm--danger' : ''}">${confirmLabel}</button></div></form>`;
+    document.body.append(dialog);
+    lucide.createIcons();
+    let settled = false;
+    const finish = (confirmed) => {
+      if (settled) return;
+      settled = true;
+      resolve(confirmed);
+      dialog.close();
+    };
+    dialog.querySelector('.action-dialog__cancel').addEventListener('click', () => finish(false));
+    dialog.querySelector('form').addEventListener('submit', (event) => { event.preventDefault(); finish(true); });
+    dialog.addEventListener('cancel', (event) => { event.preventDefault(); finish(false); });
+    dialog.addEventListener('click', (event) => { if (event.target === dialog) finish(false); });
+    dialog.addEventListener('close', () => { if (!settled) resolve(false); dialog.remove(); });
+    dialog.showModal();
+  });
 }
 
 function openMenuItemDialog(grid, existingItem = null) {
