@@ -96,7 +96,11 @@ function clearDemoContent() {
     welcome.querySelector('.subtitle').textContent = 'Os dados reais da sua operação aparecerão aqui.';
   }
   if (main?.id === 'inicio') {
-    main.querySelector('.metric-grid').innerHTML = emptyState('Sem dados ainda', 'Os indicadores aparecerão quando houver registros no banco.');
+    main.querySelectorAll('.metric-card').forEach((card) => {
+      card.querySelector(':scope > strong').textContent = '—';
+      card.querySelector('.trend').innerHTML = '<span>Sem dados</span>';
+      card.querySelector('.metric-card__footer').textContent = 'Aguardando dados reais';
+    });
     main.querySelector('.sales-panel .panel__header p').textContent = 'Aguardando os primeiros registros';
     main.querySelector('.sales-panel .chart').classList.add('chart--empty');
     main.querySelector('.sales-panel .chart__area').insertAdjacentHTML('beforeend', '<span class="chart-empty-label">Sem dados para plotar</span>');
