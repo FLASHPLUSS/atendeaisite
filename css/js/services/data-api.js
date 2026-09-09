@@ -24,6 +24,14 @@ export function createMenuItem(item) {
   return request('/api/menu', { method: 'POST', body: JSON.stringify(item) });
 }
 
+export function updateMenuItem(id, item) {
+  return request(`/api/menu/${id}`, { method: 'PATCH', body: JSON.stringify(item) });
+}
+
+export function deleteMenuItem(id) {
+  return request(`/api/menu/${id}`, { method: 'DELETE' });
+}
+
 export function updateRestaurantSettings(settings) {
   return request('/api/settings', { method: 'PUT', body: JSON.stringify(settings) });
 }
