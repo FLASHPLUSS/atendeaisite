@@ -1,14 +1,15 @@
 import { dashboardView } from '../css/js/views/dashboard.js';
 import { pedidosView } from '../css/js/views/pedidos.js';
 import { cardapioView } from '../css/js/views/cardapio.js';
+import { cardapioImagensView } from '../css/js/views/cardapio-imagens.js';
 import { configuracoesView } from '../css/js/views/configuracoes.js';
 import { relatoriosView } from '../css/js/views/relatorios.js';
 import { agenteIaView } from '../css/js/views/agente-ia.js';
 import { connectWhatsApp, disconnectWhatsApp, getConnectionState } from '../css/js/services/evolution-api.js';
-import { connectRealtime, createMenuItem, deleteMenuItem, getMenuItems, updateMenuItem, updateRestaurantSettings } from '../css/js/services/data-api.js';
+import { connectRealtime, createMenuItem, deleteMenuItem, getMenuItems, getPhysicalMenu, savePhysicalMenu, updateMenuItem, updateRestaurantSettings } from '../css/js/services/data-api.js';
 
 const app = document.querySelector('#app');
-const routes = { inicio: dashboardView, pedidos: pedidosView, cardapio: cardapioView, relatorios: relatoriosView, configuracoes: configuracoesView, 'agente-ia': agenteIaView };
+const routes = { inicio: dashboardView, pedidos: pedidosView, loja: cardapioView, cardapio: cardapioImagensView, relatorios: relatoriosView, configuracoes: configuracoesView, 'agente-ia': agenteIaView };
 let realtimeSocket;
 const menuItemsById = new Map();
 
@@ -37,6 +38,8 @@ function bindView() {
   const openButton = document.querySelector('#open-drawer');
   const closeButton = document.querySelector('#close-drawer');
   const navLinks = document.querySelectorAll('.nav-item');
+
+  if (currentRoute() !== 'cardapio') document.querySelectorAll('a[href="#cardapio"]').forEach((link) => { link.href = '#loja'; });
 
   setDrawer(window.innerWidth > 980);
 
@@ -67,11 +70,71 @@ function bindView() {
   bindAgent();
   clearDemoContent();
   bindCardapio();
+  bindPhysicalMenu();
+  normalizeStoreNavigation();
   if (!realtimeSocket && ['http:', 'https:'].includes(window.location.protocol)) realtimeSocket = connectRealtime((event) => {
     if (event.type.startsWith('menu.')) {
       const page = document.querySelector('.menu-page');
       if (page) { page.dataset.bound = 'false'; bindCardapio(); }
     }
+  });
+}
+
+function normalizeStoreNavigation() {
+  if (currentRoute() !== 'loja') return;
+  document.querySelectorAll('a[href="#cardapio"]').forEach((link) => { link.href = '#loja'; });
+  document.querySelectorAll('.nav-item span, .breadcrumb strong, h1').forEach((element) => {
+    if (element.textContent.trim() === 'Cardápio') element.textContent = 'Loja';
+  });
+  const subtitle = document.querySelector('.menu-page .subtitle');
+  if (subtitle) subtitle.textContent = 'Gerencie seus produtos, preços, disponibilidade e promoções.';
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+}
+
+function bindPhysicalMenu() {
+  const page = document.querySelector('.physical-menu-page');
+  if (!page || page.dataset.bound === 'true') return;
+  page.dataset.bound = 'true';
+  const pending = { lanches: null, bebidas: null };
+  const setPreview = (card, file) => {
+    if (!file?.type.startsWith('image/')) return;
+    const preview = card.querySelector('img');
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false;
+    card.querySelector('.physical-dropzone').classList.add('has-image');
+    card.querySelector('.physical-upload-card__status').textContent = 'Pronto para salvar';
+    pending[card.dataset.menuImage] = fileToDataUrl(file);
+  };
+  page.querySelectorAll('[data-menu-image]').forEach((card) => {
+    const input = card.querySelector('input[type="file"]');
+    input.addEventListener('change', () => setPreview(card, input.files[0]));
+    ['dragenter', 'dragover'].forEach((eventName) => card.addEventListener(eventName, (event) => { event.preventDefault(); card.querySelector('.physical-dropzone').classList.add('is-dragging'); }));
+    ['dragleave', 'drop'].forEach((eventName) => card.addEventListener(eventName, (event) => { event.preventDefault(); card.querySelector('.physical-dropzone').classList.remove('is-dragging'); }));
+    card.addEventListener('drop', (event) => setPreview(card, event.dataTransfer.files[0]));
+  });
+  getPhysicalMenu().then((menu) => ['lanches', 'bebidas'].forEach((category) => {
+    const image = menu[category]?.image_data;
+    if (!image) return;
+    const card = page.querySelector(`[data-menu-image="${category}"]`);
+    card.querySelector('img').src = image;
+    card.querySelector('img').hidden = false;
+    card.querySelector('.physical-dropzone').classList.add('has-image');
+    card.querySelector('.physical-upload-card__status').textContent = 'Salvo no banco';
+  })).catch(() => {});
+  page.querySelector('#save-physical-menu').addEventListener('click', async () => {
+    const button = page.querySelector('#save-physical-menu');
+    button.disabled = true;
+    const menu = {};
+    for (const category of ['lanches', 'bebidas']) if (pending[category]) menu[category] = await pending[category];
+    try {
+      await savePhysicalMenu(menu);
+      page.querySelectorAll('.physical-upload-card__status').forEach((status) => { if (status.textContent === 'Pronto para salvar') status.textContent = 'Salvo no banco'; });
+      page.querySelector('#physical-menu-feedback').textContent = 'Cardápio atualizado com sucesso.';
+    } catch (error) { page.querySelector('#physical-menu-feedback').textContent = error.message; }
+    button.disabled = false;
   });
 }
 

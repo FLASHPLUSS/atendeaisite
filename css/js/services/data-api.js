@@ -12,6 +12,14 @@ export function getMenuItems() {
   return request('/api/menu');
 }
 
+export function getPhysicalMenu() {
+  return request('/api/physical-menu');
+}
+
+export function savePhysicalMenu(menu) {
+  return request('/api/physical-menu', { method: 'PUT', body: JSON.stringify(menu) });
+}
+
 export function createMenuItem(item) {
   return request('/api/menu', { method: 'POST', body: JSON.stringify(item) });
 }

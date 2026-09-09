@@ -67,6 +67,13 @@ export async function migrate() {
     ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS promotion_label TEXT;
     ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS promotion_active BOOLEAN NOT NULL DEFAULT FALSE;
     CREATE INDEX IF NOT EXISTS menu_items_restaurant_idx ON menu_items (restaurant_id, updated_at DESC);
+    CREATE TABLE IF NOT EXISTS physical_menus (
+      restaurant_id BIGINT NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      category TEXT NOT NULL CHECK (category IN ('lanches', 'bebidas')),
+      image_data TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (restaurant_id, category)
+    );
   `);
 }
 
@@ -121,4 +128,19 @@ export async function deleteMenuItem(id) {
   const restaurant = await getRestaurant();
   const result = await pool.query('DELETE FROM menu_items WHERE id = $1 AND restaurant_id = $2 RETURNING *', [id, restaurant.id]);
   return result.rows[0] || null;
+}
+
+export async function getPhysicalMenu() {
+  const restaurant = await getRestaurant();
+  const result = await pool.query('SELECT category, image_data, updated_at FROM physical_menus WHERE restaurant_id = $1', [restaurant.id]);
+  return { lanches: result.rows.find((row) => row.category === 'lanches') || null, bebidas: result.rows.find((row) => row.category === 'bebidas') || null };
+}
+
+export async function savePhysicalMenu(payload) {
+  const restaurant = await getRestaurant();
+  for (const category of ['lanches', 'bebidas']) {
+    if (payload[category] === undefined) continue;
+    await pool.query(`INSERT INTO physical_menus (restaurant_id, category, image_data, updated_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (restaurant_id, category) DO UPDATE SET image_data = EXCLUDED.image_data, updated_at = NOW()`, [restaurant.id, category, payload[category] || null]);
+  }
+  return getPhysicalMenu();
 }

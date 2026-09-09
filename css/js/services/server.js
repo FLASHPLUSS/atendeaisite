@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRealtimeServer } from './websocket.js';
-import { createMenuItem, deleteMenuItem, getRestaurant, listMenu, migrate, pool, updateMenuItem, updateSettings } from './db.js';
+import { createMenuItem, deleteMenuItem, getPhysicalMenu, getRestaurant, listMenu, migrate, pool, savePhysicalMenu, updateMenuItem, updateSettings } from './db.js';
 
 const currentFile = fileURLToPath(import.meta.url);
 const servicesDirectory = path.dirname(currentFile);
@@ -89,6 +89,16 @@ async function handleApi(request, response, url) {
   if (url.pathname === '/api/menu' && request.method === 'GET') {
     requireDatabase();
     return sendJson(response, 200, await listMenu());
+  }
+  if (url.pathname === '/api/physical-menu' && request.method === 'GET') {
+    requireDatabase();
+    return sendJson(response, 200, await getPhysicalMenu());
+  }
+  if (url.pathname === '/api/physical-menu' && request.method === 'PUT') {
+    requireDatabase();
+    const menu = await savePhysicalMenu(await readJson(request));
+    realtime.broadcast('physical-menu.updated', menu);
+    return sendJson(response, 200, menu);
   }
   if (url.pathname === '/api/menu' && request.method === 'POST') {
     requireDatabase();
