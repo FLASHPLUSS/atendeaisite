@@ -103,7 +103,7 @@ export async function updateSettings(payload) {
   await pool.query(
     `INSERT INTO restaurant_settings (restaurant_id, profile, agent, printer, theme, updated_at) VALUES ($1, $2, $3, $4, COALESCE($5, 'dark'), NOW())
      ON CONFLICT (restaurant_id) DO UPDATE SET profile = COALESCE($2, restaurant_settings.profile), agent = COALESCE($3, restaurant_settings.agent), printer = COALESCE($4, restaurant_settings.printer), theme = COALESCE($5, restaurant_settings.theme), updated_at = NOW()`,
-    [restaurant.id, profile || null, agent || null, printer || null, theme || null],
+    [restaurant.id, profile || {}, agent || {}, printer || {}, theme || null],
   );
   return updated.rows[0];
 }
@@ -182,4 +182,14 @@ export async function updatePrintJob(id, payload) {
     [payload.status, payload.errorMessage || null, id],
   );
   return result.rows[0] || null;
+}
+
+export async function listOrders() {
+  const restaurant = await getRestaurant();
+  const result = await pool.query(
+    `SELECT id, order_number, payload, status, error_message, created_at, printed_at
+     FROM print_jobs WHERE restaurant_id = $1 ORDER BY created_at DESC LIMIT 100`,
+    [restaurant.id],
+  );
+  return result.rows;
 }

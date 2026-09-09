@@ -36,6 +36,10 @@ export function createPrintJob(order) {
   return request('/api/print-jobs', { method: 'POST', body: JSON.stringify(order) });
 }
 
+export function getOrders() {
+  return request('/api/orders');
+}
+
 export function updateRestaurantSettings(settings) {
   return request('/api/settings', { method: 'PUT', body: JSON.stringify(settings) });
 }

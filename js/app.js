@@ -6,7 +6,7 @@ import { configuracoesView } from '../css/js/views/configuracoes.js';
 import { relatoriosView } from '../css/js/views/relatorios.js';
 import { agenteIaView } from '../css/js/views/agente-ia.js';
 import { connectWhatsApp, disconnectWhatsApp, getConnectionState } from '../css/js/services/evolution-api.js';
-import { connectRealtime, createMenuItem, createPrintJob, deleteMenuItem, getMenuItems, getPhysicalMenu, savePhysicalMenu, updateMenuItem, updateRestaurantSettings } from '../css/js/services/data-api.js';
+import { connectRealtime, createMenuItem, createPrintJob, deleteMenuItem, getMenuItems, getOrders, getPhysicalMenu, savePhysicalMenu, updateMenuItem, updateRestaurantSettings } from '../css/js/services/data-api.js';
 
 const app = document.querySelector('#app');
 const routes = { inicio: dashboardView, pedidos: pedidosView, loja: lojaView, cardapio: cardapioView, relatorios: relatoriosView, configuracoes: configuracoesView, 'agente-ia': agenteIaView };
@@ -124,6 +124,22 @@ function bindOrders() {
   if (!button || button.dataset.bound === 'true') return;
   button.dataset.bound = 'true';
   button.addEventListener('click', openOrderDialog);
+  getOrders().then(({ orders }) => renderOrders(orders)).catch(() => {});
+}
+
+function renderOrders(orders) {
+  const table = document.querySelector('.orders-table');
+  if (!table || !orders.length) return;
+  table.innerHTML = orders.map((order) => {
+    const payload = order.payload || {};
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    const total = Number(payload.total || 0).toFixed(2).replace('.', ',');
+    const status = order.status === 'printed' ? 'Impresso' : order.status === 'failed' ? 'Falhou' : order.status === 'printing' ? 'Imprimindo' : 'Na fila';
+    const statusClass = order.status === 'printed' ? 'status--ready' : order.status === 'failed' ? 'status--preparing' : 'status--paid';
+    return `<div class="table-order"><span class="table-order__id"><span class="order-icon order-icon--green"><i data-lucide="shopping-bag"></i></span><strong>#${escapeHtml(order.order_number)}</strong><small>${escapeHtml(payload.channel || 'Painel')} · ${escapeHtml(payload.customer || 'Cliente')}</small></span><span class="channel-label"><i data-lucide="printer"></i> ${escapeHtml(payload.channel || 'Painel')}</span><span>${items.length} ${items.length === 1 ? 'item' : 'itens'}</span><span>${new Date(order.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span><strong>R$ ${total}</strong><em class="status ${statusClass}">${status}</em></div>`;
+  }).join('');
+  document.querySelector('.orders-page__intro .subtitle').textContent = `${orders.length} pedido${orders.length === 1 ? '' : 's'} registrado${orders.length === 1 ? '' : 's'} na operação.`;
+  lucide.createIcons();
 }
 
 function openOrderDialog() {
