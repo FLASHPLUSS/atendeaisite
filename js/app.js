@@ -122,6 +122,7 @@ function clearDemoContent() {
     });
     main.querySelector('.dishes-report').innerHTML = emptyState('Sem pratos vendidos', 'O ranking será criado com pedidos reais.');
   }
+  document.querySelectorAll('.empty-state').forEach((element) => element.remove());
   document.querySelectorAll('.profile strong').forEach((element) => { element.textContent = 'Usuário'; });
   document.querySelectorAll('.profile .avatar').forEach((element) => { element.textContent = 'U'; });
   document.querySelectorAll('.settings-form input').forEach((input) => { input.value = ''; });
@@ -145,7 +146,7 @@ function menuItemMarkup(item) {
 
 function renderMenuItems(grid, items) {
   menuItemsById.clear();
-  grid.innerHTML = items.length ? items.map(menuItemMarkup).join('') : emptyState('Nenhum item no cardápio', 'Adicione um prato para começar a montar seu cardápio.');
+  grid.innerHTML = items.length ? items.map(menuItemMarkup).join('') : '';
   lucide.createIcons();
 }
 
@@ -159,7 +160,7 @@ function bindCardapio() {
   const grid = page?.querySelector('.menu-grid');
   if (!page || !grid || page.dataset.bound === 'true') return;
   page.dataset.bound = 'true';
-  grid.innerHTML = emptyState('Carregando cardápio', 'Buscando produtos salvos no banco de dados.');
+  grid.innerHTML = '';
   getMenuItems().then(({ items }) => {
     renderMenuItems(grid, items);
     page.querySelector('.menu-action')?.addEventListener('click', () => openMenuItemDialog(grid));
