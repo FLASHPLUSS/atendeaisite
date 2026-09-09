@@ -6,7 +6,7 @@ import { configuracoesView } from '../css/js/views/configuracoes.js';
 import { relatoriosView } from '../css/js/views/relatorios.js';
 import { agenteIaView } from '../css/js/views/agente-ia.js';
 import { connectWhatsApp, disconnectWhatsApp, getConnectionState } from '../css/js/services/evolution-api.js';
-import { connectRealtime, createMenuItem, getMenuItems, getPhysicalMenu, savePhysicalMenu, updateRestaurantSettings } from '../css/js/services/data-api.js';
+import { connectRealtime, createMenuItem, deleteMenuItem, getMenuItems, getPhysicalMenu, savePhysicalMenu, updateMenuItem, updateRestaurantSettings } from '../css/js/services/data-api.js';
 
 const app = document.querySelector('#app');
 const routes = { inicio: dashboardView, pedidos: pedidosView, loja: lojaView, cardapio: cardapioView, relatorios: relatoriosView, configuracoes: configuracoesView, 'agente-ia': agenteIaView };
@@ -49,21 +49,6 @@ function bindView() {
       if (icon.tagName === 'svg') icon.outerHTML = '<i data-lucide="bot"></i>';
     }
   });
-  if (currentRoute() === 'loja') {
-    const storeLink = document.querySelector('.nav-item[href="#cardapio"]');
-    if (storeLink) {
-      storeLink.href = '#loja';
-      storeLink.querySelector('span').textContent = 'Loja';
-      const icon = storeLink.querySelector('[data-lucide]');
-      icon?.setAttribute('data-lucide', 'store');
-      const menuLink = storeLink.cloneNode(true);
-      menuLink.href = '#cardapio';
-      menuLink.classList.remove('is-active');
-      menuLink.querySelector('span').textContent = 'Cardápio';
-      menuLink.querySelector('[data-lucide]')?.setAttribute('data-lucide', 'utensils');
-      storeLink.after(menuLink);
-    }
-  }
   lucide.createIcons();
   bindSettings();
   bindRestaurantMedia();
@@ -136,7 +121,7 @@ function clearDemoContent() {
 function menuItemMarkup(item) {
   const initials = item.name.split(/\s+/).map((word) => word[0]).join('').slice(0, 2).toUpperCase();
   const visual = item.image_data ? `<img src="${escapeHtml(item.image_data)}" alt="" />` : `<span>${escapeHtml(initials)}</span><i data-lucide="utensils"></i>`;
-  return `<article class="menu-item${item.available ? '' : ' menu-item--paused'}"><div class="menu-item__visual menu-item__visual--green">${visual}</div><div class="menu-item__body"><div class="menu-item__title"><h2>${escapeHtml(item.name)}</h2><button class="more-button" type="button" aria-label="Opções do item"><i data-lucide="more-horizontal"></i></button></div><p>${escapeHtml(item.description)}</p><div class="menu-item__footer"><strong>R$ ${Number(item.price).toFixed(2).replace('.', ',')}</strong><span class="availability"><i></i> ${item.available ? 'Disponível' : 'Indisponível'}</span></div></div></article>`;
+  return `<article class="menu-item${item.available ? '' : ' menu-item--paused'}" data-menu-item-id="${item.id}"><div class="menu-item__visual menu-item__visual--green">${visual}</div><div class="menu-item__body"><div class="menu-item__title"><h2>${escapeHtml(item.name)}</h2><button class="more-button" type="button" aria-label="Opções de ${escapeHtml(item.name)}" aria-expanded="false"><i data-lucide="more-horizontal"></i></button></div><p>${escapeHtml(item.description)}</p><div class="menu-item__footer"><strong>R$ ${Number(item.price).toFixed(2).replace('.', ',')}</strong><span class="availability${item.available ? '' : ' availability--paused'}"><i></i> ${item.available ? 'Disponível' : 'Indisponível'}</span></div></div><div class="menu-item-actions" hidden><button type="button" data-menu-action="edit"><i data-lucide="pencil"></i> Editar produto</button><button type="button" data-menu-action="toggle"><i data-lucide="${item.available ? 'pause-circle' : 'play-circle'}"></i> ${item.available ? 'Suspender produto' : 'Reativar produto'}</button><button type="button" class="menu-item-actions__danger" data-menu-action="delete"><i data-lucide="trash-2"></i> Excluir produto</button></div></article>`;
 }
 
 function bindCardapio() {
@@ -146,8 +131,10 @@ function bindCardapio() {
   page.dataset.bound = 'true';
   grid.innerHTML = emptyState('Nenhum item no cardápio', 'Adicione um prato para começar a montar seu cardápio.');
   getMenuItems().then(({ items }) => {
+    window.menuItems = items;
     if (items.length) grid.innerHTML = items.map(menuItemMarkup).join('');
     page.querySelector('.menu-action')?.addEventListener('click', () => openMenuItemDialog(grid));
+    bindMenuItemActions(grid);
     lucide.createIcons();
   }).catch(() => {
     page.querySelector('.menu-action')?.addEventListener('click', () => openMenuItemDialog(grid));
@@ -226,21 +213,68 @@ function bindPhysicalMenu(refresh = false) {
   lucide.createIcons();
 }
 
-function openMenuItemDialog(grid) {
+function bindMenuItemActions(grid) {
+  grid.querySelectorAll('.menu-item').forEach((card) => {
+    if (card.dataset.actionsBound === 'true') return;
+    card.dataset.actionsBound = 'true';
+    const actions = card.querySelector('.menu-item-actions');
+    const toggle = card.querySelector('.more-button');
+    toggle.addEventListener('click', (event) => {
+      event.stopPropagation();
+      grid.querySelectorAll('.menu-item-actions').forEach((menu) => { if (menu !== actions) menu.hidden = true; });
+      actions.hidden = !actions.hidden;
+      toggle.setAttribute('aria-expanded', String(!actions.hidden));
+    });
+    actions.querySelector('[data-menu-action="edit"]').addEventListener('click', () => {
+      const item = window.menuItems?.find((entry) => String(entry.id) === card.dataset.menuItemId);
+      if (item) openMenuItemDialog(grid, item);
+    });
+    actions.querySelector('[data-menu-action="toggle"]').addEventListener('click', async () => {
+      const item = window.menuItems?.find((entry) => String(entry.id) === card.dataset.menuItemId);
+      if (!item) return;
+      const updated = await updateMenuItem(item.id, { available: !item.available });
+      window.menuItems = window.menuItems.map((entry) => entry.id === updated.id ? updated : entry);
+      card.outerHTML = menuItemMarkup(updated);
+      bindMenuItemActions(grid);
+      lucide.createIcons();
+    });
+    actions.querySelector('[data-menu-action="delete"]').addEventListener('click', async () => {
+      const item = window.menuItems?.find((entry) => String(entry.id) === card.dataset.menuItemId);
+      if (!item || !window.confirm(`Excluir o produto "${item.name}"?`)) return;
+      await deleteMenuItem(item.id);
+      window.menuItems = window.menuItems.filter((entry) => entry.id !== item.id);
+      card.remove();
+      if (!grid.children.length) grid.innerHTML = emptyState('Nenhum item no cardápio', 'Adicione um prato para começar a montar seu cardápio.');
+    });
+  });
+}
+
+function openMenuItemDialog(grid, existingItem = null) {
   if (document.querySelector('#menu-item-dialog')) return;
   const dialog = document.createElement('dialog');
   dialog.id = 'menu-item-dialog';
-  dialog.innerHTML = `<form method="dialog" class="menu-dialog-form"><div class="panel__header"><div><h2>Novo item do cardápio</h2><p>Salve o prato e a foto diretamente no banco de dados.</p></div><button class="icon-button" value="cancel" aria-label="Fechar"><i data-lucide="x"></i></button></div><label>Nome do prato<input name="name" required maxlength="120" /></label><label>Descrição<textarea name="description" maxlength="500"></textarea></label><div class="menu-dialog-form__row"><label>Preço<input name="price" type="number" min="0" step="0.01" required /></label><label>Categoria<select name="category"><option>Entradas</option><option selected>Pratos principais</option><option>Bebidas</option><option>Sobremesas</option></select></label></div><label>Foto do prato<input name="image" type="file" accept="image/png,image/jpeg,image/webp" /></label><div class="menu-dialog-form__actions"><button class="filter-button" value="cancel">Cancelar</button><button class="menu-action" value="default">Salvar item</button></div></form>`;
+  dialog.innerHTML = `<form method="dialog" class="menu-dialog-form"><div class="panel__header"><div><h2>${existingItem ? 'Editar produto' : 'Novo item do cardápio'}</h2><p>Salve os dados do produto diretamente no banco de dados.</p></div><button class="icon-button" value="cancel" aria-label="Fechar"><i data-lucide="x"></i></button></div><label>Nome do prato<input name="name" required maxlength="120" /></label><label>Descrição<textarea name="description" maxlength="500"></textarea></label><div class="menu-dialog-form__row"><label>Preço<input name="price" type="number" min="0" step="0.01" required /></label><label>Categoria<select name="category"><option>Entradas</option><option selected>Pratos principais</option><option>Bebidas</option><option>Sobremesas</option></select></label></div><label>Foto do prato<input name="image" type="file" accept="image/png,image/jpeg,image/webp" /></label><div class="menu-dialog-form__actions"><button class="filter-button" value="cancel">Cancelar</button><button class="menu-action" value="default">Salvar produto</button></div></form>`;
   document.body.append(dialog);
   lucide.createIcons();
   dialog.addEventListener('close', () => dialog.remove());
+  if (existingItem) {
+    dialog.querySelector('[name="name"]').value = existingItem.name;
+    dialog.querySelector('[name="description"]').value = existingItem.description || '';
+    dialog.querySelector('[name="price"]').value = existingItem.price;
+    dialog.querySelector('[name="category"]').value = existingItem.category;
+  }
   dialog.querySelector('form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const file = form.image.files[0];
     const imageData = file ? await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }) : null;
-    const item = await createMenuItem({ name: form.name.value.trim(), description: form.description.value.trim(), price: form.price.value, category: form.category.value, imageData });
-    grid.insertAdjacentHTML('afterbegin', menuItemMarkup(item));
+    const payload = { name: form.name.value.trim(), description: form.description.value.trim(), price: form.price.value, category: form.category.value };
+    if (imageData) payload.imageData = imageData;
+    const item = existingItem ? await updateMenuItem(existingItem.id, payload) : await createMenuItem(payload);
+    window.menuItems = existingItem ? window.menuItems.map((entry) => entry.id === item.id ? item : entry) : [item, ...(window.menuItems || [])];
+    if (existingItem) document.querySelector(`[data-menu-item-id="${existingItem.id}"]`)?.replaceWith(document.createRange().createContextualFragment(menuItemMarkup(item)));
+    else grid.insertAdjacentHTML('afterbegin', menuItemMarkup(item));
+    bindMenuItemActions(grid);
     lucide.createIcons();
     dialog.close();
   });
