@@ -284,8 +284,10 @@ dialog::backdrop { background: rgba(3,28,18,.72); backdrop-filter: blur(4px); }
 .empty-state strong { color: var(--ink); font-size: 13px; }
 .empty-state span { max-width: 320px; font-size: 10px; line-height: 1.5; }
 .chart--empty { position: relative; opacity: .72; }
-.chart--empty .chart-line, .chart--empty .chart-fill, .chart--empty .report-bars i { opacity: 0; }
+.chart--empty .chart-line, .chart--empty .chart-fill, .chart--empty .report-bars i { opacity: .18; }
 .chart-empty-label { position: absolute; top: 50%; left: 50%; z-index: 2; padding: 7px 10px; color: var(--muted); background: var(--white); border: 1px solid var(--line); border-radius: 7px; font-size: 10px; transform: translate(-50%, -50%); }
+.operations-panel--empty .donut { opacity: .38; }
+.operations-panel--empty .donut--orange, .operations-panel--empty .donut--green { background: conic-gradient(var(--line) 0 100%); }
 .reports-grid > .panel { position: relative; }
 .metric-grid > .empty-state, .dashboard-grid > .empty-state { grid-column: 1 / -1; }
 .order-summary > .empty-state, .reports-grid > .empty-state { grid-column: 1 / -1; }

@@ -100,7 +100,12 @@ function clearDemoContent() {
     main.querySelector('.sales-panel .panel__header p').textContent = 'Aguardando os primeiros registros';
     main.querySelector('.sales-panel .chart').classList.add('chart--empty');
     main.querySelector('.sales-panel .chart__area').insertAdjacentHTML('beforeend', '<span class="chart-empty-label">Sem dados para plotar</span>');
-    main.querySelector('.operations-panel').innerHTML = `<div class="panel__header"><div><h2>Operação hoje</h2><p>Aguardando dados da operação</p></div><span class="live-indicator"><i></i> Ao vivo</span></div>${emptyState('Sem movimentação', 'Os indicadores aparecerão assim que houver registros.')}`;
+    const operationsPanel = main.querySelector('.operations-panel');
+    operationsPanel.querySelector('.panel__header p').textContent = 'Aguardando dados da operação';
+    operationsPanel.querySelectorAll('.donut span').forEach((value) => { value.textContent = '—'; });
+    operationsPanel.querySelectorAll('.circle-stat > small').forEach((value) => { value.textContent = 'Sem dados'; });
+    operationsPanel.querySelectorAll('.channel-row b').forEach((value) => { value.textContent = '—'; });
+    operationsPanel.classList.add('operations-panel--empty');
     main.querySelector('.orders-panel--wide').innerHTML = emptyState('Nenhum pedido', 'Os pedidos reais aparecerão aqui em tempo real.');
   }
   if (main?.id === 'pedidos') {
