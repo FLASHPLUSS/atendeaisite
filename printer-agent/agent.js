@@ -14,6 +14,7 @@ const interval = Number(process.env.ATENDEAI_POLL_MS || savedConfig.pollSeconds 
 const outputDirectory = path.join(runtimeDirectory, 'output');
 const printerHost = process.env.PRINTER_HOST || savedConfig.printerHost || '';
 const printerPort = process.env.PRINTER_PORT || savedConfig.printerPort || '9100';
+let lastPollError = '';
 
 async function request(endpoint, options = {}) {
   const response = await fetch(`${apiUrl}${endpoint}`, {
@@ -21,7 +22,12 @@ async function request(endpoint, options = {}) {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || `Servidor respondeu ${response.status}.`);
+  if (!response.ok) {
+    if (endpoint === '/api/print-jobs' && response.status === 400 && data.message?.includes('nome do restaurante')) {
+      throw new Error('A VPS está com uma versão antiga e ainda não possui a fila de impressão. Atualize o servidor AtendeAI.');
+    }
+    throw new Error(data.message || `Servidor respondeu ${response.status}.`);
+  }
   return data;
 }
 
@@ -52,7 +58,10 @@ async function poll() {
       }
     }
   } catch (error) {
-    console.error(`[agente] ${error.message}`);
+    if (lastPollError !== error.message) {
+      console.error(`[agente] ${error.message}`);
+      lastPollError = error.message;
+    }
   }
 }
 
