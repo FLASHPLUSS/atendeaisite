@@ -58,14 +58,16 @@ end;
 
 function JsonEscape(Value: String): String;
 begin
-  Result := StringChangeEx(Value, '\\', '\\\\', True);
-  Result := StringChangeEx(Result, '"', '\\"', True);
+  StringChangeEx(Value, '\\', '\\\\', True);
+  StringChangeEx(Value, '"', '\\"', True);
+  Result := Value;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ConfigFile: String;
   Mode: String;
+  ResultCode: Integer;
 begin
   if CurStep <> ssPostInstall then Exit;
   if ModePage.SelectedValueIndex = 1 then Mode := 'escpos' else Mode := 'virtual';
