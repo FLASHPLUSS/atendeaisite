@@ -47,9 +47,11 @@ export async function migrate() {
       restaurant_id BIGINT PRIMARY KEY REFERENCES restaurants(id) ON DELETE CASCADE,
       profile JSONB NOT NULL DEFAULT '{}'::jsonb,
       agent JSONB NOT NULL DEFAULT '{}'::jsonb,
+      printer JSONB NOT NULL DEFAULT '{}'::jsonb,
       theme TEXT NOT NULL DEFAULT 'dark',
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE restaurant_settings ADD COLUMN IF NOT EXISTS printer JSONB NOT NULL DEFAULT '{}'::jsonb;
     CREATE TABLE IF NOT EXISTS menu_items (
       id BIGSERIAL PRIMARY KEY,
       restaurant_id BIGINT NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
@@ -93,15 +95,15 @@ export async function listMenu() {
 
 export async function updateSettings(payload) {
   const restaurant = await getRestaurant();
-  const { name, phone, address, logoData, profile, agent, theme } = payload;
+  const { name, phone, address, logoData, profile, agent, printer, theme } = payload;
   const updated = await pool.query(
     'UPDATE restaurants SET name = COALESCE($1, name), phone = COALESCE($2, phone), address = COALESCE($3, address), logo_data = COALESCE($4, logo_data), updated_at = NOW() WHERE id = $5 RETURNING *',
     [name, phone, address, logoData, restaurant.id],
   );
   await pool.query(
-    `INSERT INTO restaurant_settings (restaurant_id, profile, agent, theme, updated_at) VALUES ($1, $2, $3, COALESCE($4, 'dark'), NOW())
-     ON CONFLICT (restaurant_id) DO UPDATE SET profile = COALESCE($2, restaurant_settings.profile), agent = COALESCE($3, restaurant_settings.agent), theme = COALESCE($4, restaurant_settings.theme), updated_at = NOW()`,
-    [restaurant.id, profile || null, agent || null, theme || null],
+    `INSERT INTO restaurant_settings (restaurant_id, profile, agent, printer, theme, updated_at) VALUES ($1, $2, $3, $4, COALESCE($5, 'dark'), NOW())
+     ON CONFLICT (restaurant_id) DO UPDATE SET profile = COALESCE($2, restaurant_settings.profile), agent = COALESCE($3, restaurant_settings.agent), printer = COALESCE($4, restaurant_settings.printer), theme = COALESCE($5, restaurant_settings.theme), updated_at = NOW()`,
+    [restaurant.id, profile || null, agent || null, printer || null, theme || null],
   );
   return updated.rows[0];
 }

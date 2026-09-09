@@ -2,12 +2,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { formatOrder } from './formatter.js';
+import { printEscPos } from './escpos.js';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const apiUrl = (process.env.ATENDEAI_API_URL || 'http://localhost:3000').replace(/\/$/, '');
 const mode = process.env.ATENDEAI_PRINT_MODE || 'virtual';
 const interval = Number(process.env.ATENDEAI_POLL_MS || 5000);
 const outputDirectory = path.join(directory, 'output');
+const printerHost = process.env.PRINTER_HOST || '';
+const printerPort = process.env.PRINTER_PORT || '9100';
 
 async function request(endpoint, options = {}) {
   const response = await fetch(`${apiUrl}${endpoint}`, {
@@ -29,7 +32,8 @@ async function printVirtual(job, receipt) {
 async function printJob(job) {
   const receipt = formatOrder(job);
   if (mode === 'virtual') return printVirtual(job, receipt);
-  throw new Error('Modo de impressao real ainda requer o adaptador ESC/POS configurado.');
+  if (mode === 'escpos') return printEscPos(receipt, { host: printerHost, port: printerPort });
+  throw new Error(`Modo de impressão desconhecido: ${mode}. Use virtual ou escpos.`);
 }
 
 async function poll() {

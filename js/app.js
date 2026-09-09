@@ -6,7 +6,7 @@ import { configuracoesView } from '../css/js/views/configuracoes.js';
 import { relatoriosView } from '../css/js/views/relatorios.js';
 import { agenteIaView } from '../css/js/views/agente-ia.js';
 import { connectWhatsApp, disconnectWhatsApp, getConnectionState } from '../css/js/services/evolution-api.js';
-import { connectRealtime, createMenuItem, deleteMenuItem, getMenuItems, getPhysicalMenu, savePhysicalMenu, updateMenuItem, updateRestaurantSettings } from '../css/js/services/data-api.js';
+import { connectRealtime, createMenuItem, createPrintJob, deleteMenuItem, getMenuItems, getPhysicalMenu, savePhysicalMenu, updateMenuItem, updateRestaurantSettings } from '../css/js/services/data-api.js';
 
 const app = document.querySelector('#app');
 const routes = { inicio: dashboardView, pedidos: pedidosView, loja: lojaView, cardapio: cardapioView, relatorios: relatoriosView, configuracoes: configuracoesView, 'agente-ia': agenteIaView };
@@ -564,6 +564,7 @@ function bindSettings() {
   const restaurantSection = settingsPage.querySelector('.settings-restaurant');
   const notificationsSection = settingsPage.querySelector('.settings-notifications');
   const appearanceSection = settingsPage.querySelector('.settings-appearance');
+  const printerSection = settingsPage.querySelector('.settings-printer');
   const themeOptions = settingsPage.querySelectorAll('[data-theme-choice]');
   const profileSection = settingsPage.querySelector('.settings-default-sections .settings-section');
   const profileSaveButton = profileSection?.querySelector('.settings-save');
@@ -623,7 +624,41 @@ function bindSettings() {
     restaurantSection.hidden = selectedSection !== 'restaurant';
     notificationsSection.hidden = selectedSection !== 'notifications';
     appearanceSection.hidden = selectedSection !== 'appearance';
+    printerSection.hidden = selectedSection !== 'printer';
   }));
+
+  if (printerSection) {
+    const modeInput = printerSection.querySelector('#printer-mode');
+    const hostInput = printerSection.querySelector('#printer-host');
+    const portInput = printerSection.querySelector('#printer-port');
+    const pollInput = printerSection.querySelector('#printer-poll');
+    const saveButton = printerSection.querySelector('#printer-save-button');
+    const testButton = printerSection.querySelector('#printer-test-button');
+    const feedback = printerSection.querySelector('#printer-save-feedback');
+    const stored = JSON.parse(localStorage.getItem('atende-printer-config') || '{}');
+    if (stored.mode) modeInput.value = stored.mode;
+    if (stored.host) hostInput.value = stored.host;
+    if (stored.port) portInput.value = stored.port;
+    if (stored.pollSeconds) pollInput.value = stored.pollSeconds;
+    const updateHostState = () => { printerSection.querySelector('.printer-settings-host').hidden = modeInput.value !== 'escpos'; };
+    modeInput.addEventListener('change', updateHostState);
+    updateHostState();
+    saveButton.addEventListener('click', () => {
+      const printer = { mode: modeInput.value, host: hostInput.value.trim(), port: Number(portInput.value), pollSeconds: Number(pollInput.value) };
+      localStorage.setItem('atende-printer-config', JSON.stringify(printer));
+      updateRestaurantSettings({ printer }).then(() => { feedback.textContent = 'Configuração salva no servidor.'; }).catch((error) => { feedback.textContent = `Salvo localmente. Servidor: ${error.message}`; });
+    });
+    testButton.addEventListener('click', async () => {
+      testButton.disabled = true;
+      feedback.textContent = 'Criando pedido de teste na fila...';
+      try {
+        await createPrintJob({ orderNumber: `TESTE-${Date.now()}`, order: { items: [{ quantity: 1, name: 'X-Burger de teste', price: 25 }], total: 25, notes: 'Gerado pelo painel' } });
+        feedback.textContent = 'Pedido de teste criado. O agente irá imprimir no próximo ciclo.';
+      } catch (error) {
+        feedback.textContent = error.message;
+      } finally { testButton.disabled = false; }
+    });
+  }
 
   themeOptions.forEach((option) => option.addEventListener('click', () => {
     themeOptions.forEach((item) => item.classList.remove('is-selected'));
