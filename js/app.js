@@ -55,6 +55,7 @@ function bindView() {
   hydrateRestaurantBrand();
   bindReports();
   bindAgent();
+  bindOrders();
   clearDemoContent();
   bindCardapio();
   bindPhysicalMenu();
@@ -116,6 +117,45 @@ function clearDemoContent() {
   if (assistantName) assistantName.value = '';
   if (assistantPrompt) assistantPrompt.value = '';
   lucide.createIcons();
+}
+
+function bindOrders() {
+  const button = document.querySelector('#new-order-button');
+  if (!button || button.dataset.bound === 'true') return;
+  button.dataset.bound = 'true';
+  button.addEventListener('click', openOrderDialog);
+}
+
+function openOrderDialog() {
+  if (document.querySelector('#order-dialog')) return;
+  const dialog = document.createElement('dialog');
+  dialog.id = 'order-dialog';
+  dialog.innerHTML = `<form method="dialog" class="order-dialog-form"><div class="panel__header"><div><h2>Novo pedido</h2><p>Crie o pedido e envie para a fila de impressão.</p></div><button class="icon-button" value="cancel" aria-label="Fechar"><i data-lucide="x"></i></button></div><div class="order-dialog-form__grid"><label>Cliente<input name="customer" placeholder="Nome do cliente" /></label><label>Canal<select name="channel"><option>Salão</option><option>Delivery</option><option>Retirada</option></select></label></div><label>Produto<input name="itemName" required placeholder="Ex.: X-Burger" /></label><div class="order-dialog-form__grid"><label>Quantidade<input name="quantity" type="number" min="1" value="1" required /></label><label>Preço unitário<input name="price" type="number" min="0" step="0.01" value="0" required /></label></div><label>Observações<textarea name="notes" maxlength="300" placeholder="Ex.: sem cebola"></textarea></label><div class="menu-dialog-form__actions"><button class="filter-button" value="cancel">Cancelar</button><button class="menu-action" value="default"><i data-lucide="printer"></i> Criar e imprimir</button></div></form>`;
+  document.body.append(dialog);
+  lucide.createIcons();
+  dialog.addEventListener('close', () => dialog.remove());
+  dialog.querySelector('form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const quantity = Number(form.quantity.value);
+    const price = Number(form.price.value);
+    const orderNumber = `PED-${Date.now().toString().slice(-6)}`;
+    const submit = form.querySelector('[value="default"]');
+    submit.disabled = true;
+    submit.textContent = 'Enviando...';
+    try {
+      await createPrintJob({ orderNumber, order: { customer: form.customer.value.trim(), channel: form.channel.value, items: [{ quantity, name: form.itemName.value.trim(), price }], total: quantity * price, notes: form.notes.value.trim() } });
+      dialog.close();
+      const feedback = document.querySelector('.orders-page__intro .subtitle');
+      if (feedback) feedback.textContent = `Pedido ${orderNumber} criado e enviado para impressão.`;
+    } catch (error) {
+      submit.disabled = false;
+      submit.innerHTML = '<i data-lucide="printer"></i> Criar e imprimir';
+      submit.title = error.message;
+      lucide.createIcons();
+    }
+  });
+  dialog.showModal();
 }
 
 function menuItemMarkup(item) {
