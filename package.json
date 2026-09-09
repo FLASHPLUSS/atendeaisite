@@ -1,0 +1,13 @@
+{
+  "name": "atendeai",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node css/js/services/server.js",
+    "db:migrate": "node css/js/services/migrate.js"
+  },
+  "dependencies": {
+    "pg": "^8.16.3",
+    "ws": "^8.18.3"
+  }
+}
