@@ -6,7 +6,7 @@ import { configuracoesView } from '../css/js/views/configuracoes.js';
 import { relatoriosView } from '../css/js/views/relatorios.js';
 import { agenteIaView } from '../css/js/views/agente-ia.js';
 import { connectWhatsApp, disconnectWhatsApp, getConnectionState } from '../css/js/services/evolution-api.js';
-import { connectRealtime, createMenuItem, createPrintJob, deleteMenuItem, getMenuItems, getOrders, getPhysicalMenu, savePhysicalMenu, updateMenuItem, updateRestaurantSettings } from '../css/js/services/data-api.js';
+import { connectRealtime, createMenuItem, createPrintJob, deleteMenuItem, getMenuItems, getOrders, getPhysicalMenu, getRestaurantSettings, savePhysicalMenu, updateMenuItem, updateRestaurantSettings } from '../css/js/services/data-api.js';
 
 const app = document.querySelector('#app');
 const routes = { inicio: dashboardView, pedidos: pedidosView, loja: lojaView, cardapio: cardapioView, relatorios: relatoriosView, configuracoes: configuracoesView, 'agente-ia': agenteIaView };
@@ -124,6 +124,8 @@ function bindOrders() {
   if (!button || button.dataset.bound === 'true') return;
   button.dataset.bound = 'true';
   button.addEventListener('click', openOrderDialog);
+  const panel = document.querySelector('.orders-table-panel');
+  if (panel && !panel.querySelector('.orders-table')) panel.innerHTML = '<div class="orders-table"><div class="empty-state"><i data-lucide="loader-circle"></i><strong>Carregando pedidos</strong><span>Buscando os pedidos salvos no banco.</span></div></div>';
   getOrders().then(({ orders }) => renderOrders(orders)).catch(() => {});
 }
 
@@ -640,6 +642,14 @@ function bindSettings() {
     restaurantNameInput.required = true;
     const savedRestaurant = JSON.parse(localStorage.getItem('atende-restaurant-config') || '{}');
     if (savedRestaurant.name) restaurantNameInput.value = savedRestaurant.name;
+    getRestaurantSettings().then((restaurant) => {
+      restaurantNameInput.value = restaurant.name || restaurantNameInput.value;
+      const fields = restaurantSection.querySelectorAll('.settings-form input');
+      if (fields[1]) fields[1].value = restaurant.phone || '';
+      if (fields[2]) fields[2].value = restaurant.address || '';
+      localStorage.setItem('atende-restaurant-config', JSON.stringify({ name: restaurant.name || '', phone: restaurant.phone || '', address: restaurant.address || '' }));
+      hydrateRestaurantBrand();
+    }).catch(() => {});
     restaurantSaveButton?.addEventListener('click', () => {
       const name = restaurantNameInput.value.trim();
       if (!name) {
@@ -648,12 +658,16 @@ function bindSettings() {
         return;
       }
       restaurantNameInput.setCustomValidity('');
-      localStorage.setItem('atende-restaurant-config', JSON.stringify({ ...savedRestaurant, name }));
       const fields = restaurantSection.querySelectorAll('.settings-form input');
-      updateRestaurantSettings({ name, phone: fields[1]?.value, address: fields[2]?.value }).catch((error) => console.warn(error.message));
-      hydrateRestaurantBrand();
-      const feedback = restaurantSaveButton.closest('.settings-section__footer')?.querySelector('small');
-      if (feedback) feedback.textContent = `Instância definida: ${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+      updateRestaurantSettings({ name, phone: fields[1]?.value || '', address: fields[2]?.value || '' }).then((restaurant) => {
+        localStorage.setItem('atende-restaurant-config', JSON.stringify({ name: restaurant.name, phone: restaurant.phone || '', address: restaurant.address || '' }));
+        hydrateRestaurantBrand();
+        const feedback = restaurantSaveButton.closest('.settings-section__footer')?.querySelector('small');
+        if (feedback) feedback.textContent = `Dados salvos: ${restaurant.name}`;
+      }).catch((error) => {
+        const feedback = restaurantSaveButton.closest('.settings-section__footer')?.querySelector('small');
+        if (feedback) feedback.textContent = `Erro ao salvar: ${error.message}`;
+      });
     });
   }
   restaurantSection?.addEventListener('click', (event) => {

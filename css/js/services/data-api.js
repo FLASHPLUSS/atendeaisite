@@ -40,6 +40,10 @@ export function getOrders() {
   return request('/api/orders');
 }
 
+export function getRestaurantSettings() {
+  return request('/api/settings');
+}
+
 export function updateRestaurantSettings(settings) {
   return request('/api/settings', { method: 'PUT', body: JSON.stringify(settings) });
 }
