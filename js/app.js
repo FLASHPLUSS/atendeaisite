@@ -55,8 +55,8 @@ function bindView() {
   hydrateRestaurantBrand();
   bindReports();
   bindAgent();
-  bindOrders();
   clearDemoContent();
+  bindOrders();
   bindCardapio();
   bindPhysicalMenu();
   if (!realtimeSocket && ['http:', 'https:'].includes(window.location.protocol)) realtimeSocket = connectRealtime((event) => {
