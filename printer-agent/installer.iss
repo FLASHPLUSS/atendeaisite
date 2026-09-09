@@ -41,7 +41,7 @@ procedure InitializeWizard;
 begin
   ConfigPage := CreateInputQueryPage(wpWelcome, 'Conexao com a plataforma', 'Configure o agente de impressao', 'Informe o endereco da sua plataforma AtendeAI.');
   ConfigPage.Add('URL da plataforma:', False);
-  ConfigPage.Values[0] := 'https://seu-dominio.com';
+  ConfigPage.Values[0] := 'https://www.anota.ai.venusdev.xyz';
 
   ModePage := CreateInputOptionPage(ConfigPage.ID, 'Modo de impressao', 'Escolha como deseja testar', 'Voce pode trocar este modo depois editando config.json.', True, False);
   ModePage.Add('Virtual (teste sem impressora)');

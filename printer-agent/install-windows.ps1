@@ -1,5 +1,5 @@
 param(
-  [string]$ApiUrl = 'https://seu-dominio.com',
+  [string]$ApiUrl = 'https://www.anota.ai.venusdev.xyz',
   [ValidateSet('virtual', 'escpos')][string]$Mode = 'virtual',
   [string]$PrinterHost = '',
   [int]$PrinterPort = 9100,
