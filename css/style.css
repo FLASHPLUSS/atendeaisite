@@ -294,6 +294,17 @@ dialog::backdrop { background: rgba(3,28,18,.72); backdrop-filter: blur(4px); }
 .physical-menu-footer .menu-action:disabled { cursor: wait; opacity: .6; }
 @media (max-width: 760px) { .physical-menu-intro { align-items: start; flex-direction: column; }.physical-menu-grid { grid-template-columns: 1fr; }.physical-menu-footer { align-items: start; flex-direction: column; }.physical-menu-footer .menu-action { width: 100%; justify-content: center; } }
 @media (max-width: 620px) { .physical-menu-card { padding: 17px 15px; }.physical-upload { min-height: 245px; }.physical-upload__preview { grid-template-columns: 82px 1fr 28px; }.physical-upload__preview img { width: 82px; height: 125px; } }
+.menu-item { position: relative; overflow: visible; }
+.menu-item--menu-open { z-index: 40; }
+.menu-item__visual { border-radius: 14px 14px 0 0; }
+.menu-item-actions { position: absolute; top: 48px; right: 14px; z-index: 30; display: flex; width: min(190px, calc(100% - 28px)); flex-direction: column; gap: 3px; padding: 6px; overflow: hidden; background: #0a2116; border: 1px solid #2a5a3d; border-radius: 10px; box-shadow: 0 14px 30px rgba(0, 0, 0, .38); opacity: 0; pointer-events: none; transform: translateY(-5px) scale(.98); transform-origin: top right; transition: opacity .16s ease, transform .16s ease, visibility .16s ease; visibility: hidden; }
+.menu-item-actions.is-open { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); visibility: visible; }
+.menu-item-actions button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 34px; padding: 8px 9px; color: #b5d0bd; background: transparent; border-radius: 7px; text-align: left; font-size: 10px; white-space: nowrap; }
+.menu-item-actions button:hover, .menu-item-actions button:focus-visible { color: #effff4; background: #153b26; outline: 0; }
+.menu-item-actions button svg { width: 14px; height: 14px; flex: 0 0 auto; color: #9bdc68; }
+.menu-item-actions .menu-item-actions__danger { color: #e5aaa0; }
+.menu-item-actions .menu-item-actions__danger:hover, .menu-item-actions .menu-item-actions__danger:focus-visible { color: #ffd2ca; background: #422823; }
+.menu-item-actions .menu-item-actions__danger svg { color: #ed806e; }
 .menu-dialog-form { display: flex; flex-direction: column; gap: 15px; padding: 22px; }
 .menu-dialog-form h2 { font-size: 18px; }
 .menu-dialog-form p { margin-top: 5px; color: var(--muted); font-size: 10px; }

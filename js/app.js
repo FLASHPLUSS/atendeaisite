@@ -121,7 +121,7 @@ function clearDemoContent() {
 function menuItemMarkup(item) {
   const initials = item.name.split(/\s+/).map((word) => word[0]).join('').slice(0, 2).toUpperCase();
   const visual = item.image_data ? `<img src="${escapeHtml(item.image_data)}" alt="" />` : `<span>${escapeHtml(initials)}</span><i data-lucide="utensils"></i>`;
-  return `<article class="menu-item${item.available ? '' : ' menu-item--paused'}" data-menu-item-id="${item.id}"><div class="menu-item__visual menu-item__visual--green">${visual}</div><div class="menu-item__body"><div class="menu-item__title"><h2>${escapeHtml(item.name)}</h2><button class="more-button" type="button" aria-label="Opções de ${escapeHtml(item.name)}" aria-expanded="false"><i data-lucide="more-horizontal"></i></button></div><p>${escapeHtml(item.description)}</p><div class="menu-item__footer"><strong>R$ ${Number(item.price).toFixed(2).replace('.', ',')}</strong><span class="availability${item.available ? '' : ' availability--paused'}"><i></i> ${item.available ? 'Disponível' : 'Indisponível'}</span></div></div><div class="menu-item-actions" hidden><button type="button" data-menu-action="edit"><i data-lucide="pencil"></i> Editar produto</button><button type="button" data-menu-action="toggle"><i data-lucide="${item.available ? 'pause-circle' : 'play-circle'}"></i> ${item.available ? 'Suspender produto' : 'Reativar produto'}</button><button type="button" class="menu-item-actions__danger" data-menu-action="delete"><i data-lucide="trash-2"></i> Excluir produto</button></div></article>`;
+  return `<article class="menu-item${item.available ? '' : ' menu-item--paused'}" data-menu-item-id="${item.id}"><div class="menu-item__visual menu-item__visual--green">${visual}</div><div class="menu-item__body"><div class="menu-item__title"><h2>${escapeHtml(item.name)}</h2><button class="more-button" type="button" aria-label="Opções de ${escapeHtml(item.name)}" aria-expanded="false"><i data-lucide="more-horizontal"></i></button></div><p>${escapeHtml(item.description)}</p><div class="menu-item__footer"><strong>R$ ${Number(item.price).toFixed(2).replace('.', ',')}</strong><span class="availability${item.available ? '' : ' availability--paused'}"><i></i> ${item.available ? 'Disponível' : 'Indisponível'}</span></div></div><div class="menu-item-actions"><button type="button" data-menu-action="edit"><i data-lucide="pencil"></i><span>Editar produto</span></button><button type="button" data-menu-action="toggle"><i data-lucide="${item.available ? 'pause-circle' : 'play-circle'}"></i><span>${item.available ? 'Suspender produto' : 'Reativar produto'}</span></button><button type="button" class="menu-item-actions__danger" data-menu-action="delete"><i data-lucide="trash-2"></i><span>Excluir produto</span></button></div></article>`;
 }
 
 function bindCardapio() {
@@ -221,15 +221,20 @@ function bindMenuItemActions(grid) {
     const toggle = card.querySelector('.more-button');
     toggle.addEventListener('click', (event) => {
       event.stopPropagation();
-      grid.querySelectorAll('.menu-item-actions').forEach((menu) => { if (menu !== actions) menu.hidden = true; });
-      actions.hidden = !actions.hidden;
-      toggle.setAttribute('aria-expanded', String(!actions.hidden));
+      grid.querySelectorAll('.menu-item-actions.is-open').forEach((menu) => { if (menu !== actions) { menu.classList.remove('is-open'); menu.closest('.menu-item')?.classList.remove('menu-item--menu-open'); } });
+      actions.classList.toggle('is-open');
+      card.classList.toggle('menu-item--menu-open', actions.classList.contains('is-open'));
+      toggle.setAttribute('aria-expanded', String(actions.classList.contains('is-open')));
     });
     actions.querySelector('[data-menu-action="edit"]').addEventListener('click', () => {
+      actions.classList.remove('is-open');
+      card.classList.remove('menu-item--menu-open');
       const item = window.menuItems?.find((entry) => String(entry.id) === card.dataset.menuItemId);
       if (item) openMenuItemDialog(grid, item);
     });
     actions.querySelector('[data-menu-action="toggle"]').addEventListener('click', async () => {
+      actions.classList.remove('is-open');
+      card.classList.remove('menu-item--menu-open');
       const item = window.menuItems?.find((entry) => String(entry.id) === card.dataset.menuItemId);
       if (!item) return;
       const updated = await updateMenuItem(item.id, { available: !item.available });
@@ -239,6 +244,8 @@ function bindMenuItemActions(grid) {
       lucide.createIcons();
     });
     actions.querySelector('[data-menu-action="delete"]').addEventListener('click', async () => {
+      actions.classList.remove('is-open');
+      card.classList.remove('menu-item--menu-open');
       const item = window.menuItems?.find((entry) => String(entry.id) === card.dataset.menuItemId);
       if (!item || !window.confirm(`Excluir o produto "${item.name}"?`)) return;
       await deleteMenuItem(item.id);
@@ -247,6 +254,12 @@ function bindMenuItemActions(grid) {
       if (!grid.children.length) grid.innerHTML = emptyState('Nenhum item no cardápio', 'Adicione um prato para começar a montar seu cardápio.');
     });
   });
+  if (grid.dataset.outsideMenuBound !== 'true') {
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.menu-item')) grid.querySelectorAll('.menu-item-actions.is-open').forEach((menu) => { menu.classList.remove('is-open'); menu.closest('.menu-item')?.classList.remove('menu-item--menu-open'); });
+    });
+    grid.dataset.outsideMenuBound = 'true';
+  }
 }
 
 function openMenuItemDialog(grid, existingItem = null) {
