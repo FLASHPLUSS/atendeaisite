@@ -1,14 +1,21 @@
 {
-  "name": "atendeai-printer-agent",
+  "name": "atendeprint",
+  "version": "2.0.0",
   "private": true,
+  "description": "Agente de impressao AtendePrint: imprime os pedidos do painel na impressora termica do restaurante.",
   "type": "module",
   "scripts": {
     "start": "node agent.js",
     "test-print": "node agent.js --test",
-    "build:windows": "pkg . --targets node22-win-x64 --output dist/AtendeAI-Printer-Agent.exe"
+    "icon": "powershell -NoProfile -ExecutionPolicy Bypass -File gerar-icone.ps1",
+    "preparar-node": "powershell -NoProfile -ExecutionPolicy Bypass -File preparar-node-icone.ps1",
+    "build:windows": "pkg . --targets node22-win-x64 --output dist/AtendePrint.exe",
+    "build:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File build-installer.ps1"
   },
   "bin": "agent.js",
   "devDependencies": {
-    "@yao-pkg/pkg": "^6.22.0"
+    "@yao-pkg/pkg": "^6.22.0",
+    "rcedit": "^5.0.2",
+    "resedit-cli": "^3.1.0"
   }
 }

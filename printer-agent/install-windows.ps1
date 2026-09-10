@@ -7,9 +7,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$installDirectory = Join-Path $env:LOCALAPPDATA 'AtendeAI\PrinterAgent'
+$installDirectory = Join-Path $env:LOCALAPPDATA 'AtendeAI\AtendePrint'
 New-Item -ItemType Directory -Force -Path $installDirectory | Out-Null
-Copy-Item (Join-Path $PSScriptRoot 'dist\AtendeAI-Printer-Agent.exe') (Join-Path $installDirectory 'AtendeAI-Printer-Agent.exe') -Force
+Copy-Item (Join-Path $PSScriptRoot 'dist\AtendePrint.exe') (Join-Path $installDirectory 'AtendePrint.exe') -Force
 New-Item -ItemType Directory -Force -Path (Join-Path $installDirectory 'output') | Out-Null
 @{
   apiUrl = $ApiUrl
@@ -19,8 +19,8 @@ New-Item -ItemType Directory -Force -Path (Join-Path $installDirectory 'output')
   printerPort = $PrinterPort
 } | ConvertTo-Json | ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $installDirectory 'config.json'), $_, (New-Object System.Text.UTF8Encoding($false))) }
 
-$taskName = 'AtendeAI Printer Agent'
-$action = New-ScheduledTaskAction -Execute (Join-Path $installDirectory 'AtendeAI-Printer-Agent.exe') -WorkingDirectory $installDirectory
+$taskName = 'AtendePrint'
+$action = New-ScheduledTaskAction -Execute (Join-Path $installDirectory 'AtendePrint.exe') -WorkingDirectory $installDirectory
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null

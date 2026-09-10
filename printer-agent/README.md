@@ -1,4 +1,4 @@
-# AtendeAI Printer Agent
+# AtendePrint - Agente de Impressão AtendeAI
 
 Agente local que busca os pedidos na fila da plataforma e imprime no computador do restaurante.
 Ele roda **no PC onde a impressora está ligada** (USB) ou na mesma rede dela (ESC/POS).
@@ -22,7 +22,7 @@ Ele roda **no PC onde a impressora está ligada** (USB) ou na mesma rede dela (E
   ```
 
 - **Node.js 18 ou superior** apenas se você for rodar pelo código-fonte (`node agent.js`).
-  Usando o `AtendeAI-Printer-Agent.exe`, o Node não é necessário.
+  Usando o `AtendePrint.exe`, o Node não é necessário.
 
 ## Passo a passo do modo USB
 
@@ -36,7 +36,7 @@ Ele roda **no PC onde a impressora está ligada** (USB) ou na mesma rede dela (E
    Se estiver usando o executável instalado:
 
    ```powershell
-   & "$env:LOCALAPPDATA\AtendeAI\PrinterAgent\AtendeAI-Printer-Agent.exe" --list-printers
+   & "$env:LOCALAPPDATA\AtendeAI\AtendePrint\AtendePrint.exe" --list-printers
    ```
 
    E sem Node.js instalado:
@@ -106,7 +106,7 @@ A configuração salva no painel (`/api/printer-config`) só preenche o que **n�
 
 | Script | Para que serve |
 | --- | --- |
-| `instalar-inicio-automatico.ps1` | Cria a tarefa agendada **AtendeAI Printer Agent**, que sobe o agente a cada logon do Windows. Não precisa de administrador. |
+| `instalar-inicio-automatico.ps1` | Cria a tarefa agendada **AtendePrint**, que sobe o agente a cada logon do Windows. Não precisa de administrador. |
 | `iniciar-agente.ps1` | Roda o agente em primeiro plano gravando tudo em `printer-agent/agent.log` (UTF-8). |
 | `enviar-teste.ps1` | Cria um pedido de teste na plataforma para conferir a impressão de ponta a ponta. |
 | `list-printers.ps1` | Lista os nomes exatos das impressoras do Windows (não precisa de Node.js). |
@@ -124,8 +124,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File printer-agent/enviar-teste.p
 Para parar/remover o início automático:
 
 ```powershell
-Stop-ScheduledTask -TaskName 'AtendeAI Printer Agent'
-Unregister-ScheduledTask -TaskName 'AtendeAI Printer Agent' -Confirm:$false
+Stop-ScheduledTask -TaskName 'AtendePrint'
+Unregister-ScheduledTask -TaskName 'AtendePrint' -Confirm:$false
 ```
 
 ## Variáveis de ambiente
@@ -178,7 +178,7 @@ O script instala as dependências, compila o agente com o `pkg` (se ainda não e
 Inno Setup. O arquivo final fica em:
 
 ```
-printer-agent/dist/installer/AtendeAI-Printer-Agent-Setup-v2.0.0.exe
+printer-agent/dist/installer/AtendePrint-Setup-v2.0.0.exe
 ```
 
 ### O que o assistente faz
@@ -194,8 +194,8 @@ printer-agent/dist/installer/AtendeAI-Printer-Agent-Setup-v2.0.0.exe
 Ao concluir, o instalador:
 
 - encerra um agente que já esteja aberto (`taskkill`);
-- copia o `AtendeAI-Printer-Agent.exe` e o `parar-agentes-antigos.ps1` para
-  `%LOCALAPPDATA%\AtendeAI\PrinterAgent` (não precisa de administrador);
+- copia o `AtendePrint.exe` e o `parar-agentes-antigos.ps1` para
+  `%LOCALAPPDATA%\AtendeAI\AtendePrint` (não precisa de administrador);
 - grava o `config.json` na mesma pasta com as respostas do assistente;
 - roda `parar-agentes-antigos.ps1`, que remove a antiga **tarefa agendada** e encerra agentes
   iniciados a partir da pasta do projeto — isso evita **dois agentes disputando a mesma fila**;
@@ -205,16 +205,16 @@ Ao concluir, o instalador:
 
 | Item | Caminho |
 | --- | --- |
-| Executável e `config.json` | `%LOCALAPPDATA%\AtendeAI\PrinterAgent` |
-| Cupons do modo `virtual` | `%LOCALAPPDATA%\AtendeAI\PrinterAgent\output` |
+| Executável e `config.json` | `%LOCALAPPDATA%\AtendeAI\AtendePrint` |
+| Cupons do modo `virtual` | `%LOCALAPPDATA%\AtendeAI\AtendePrint\output` |
 | Início automático | atalho em `shell:startup` |
-| Desinstalar | "Aplicativos instalados" do Windows → **AtendeAI Printer Agent** |
+| Desinstalar | "Aplicativos instalados" do Windows → **AtendePrint** |
 
 Para diagnosticar depois de instalado, sem depender de Node.js:
 
 ```powershell
-& "$env:LOCALAPPDATA\AtendeAI\PrinterAgent\AtendeAI-Printer-Agent.exe" --list-printers
-& "$env:LOCALAPPDATA\AtendeAI\PrinterAgent\AtendeAI-Printer-Agent.exe" --test
+& "$env:LOCALAPPDATA\AtendeAI\AtendePrint\AtendePrint.exe" --list-printers
+& "$env:LOCALAPPDATA\AtendeAI\AtendePrint\AtendePrint.exe" --test
 ```
 
 ### Gerar só o executável (sem instalador)
@@ -222,11 +222,25 @@ Para diagnosticar depois de instalado, sem depender de Node.js:
 ```powershell
 Set-Location printer-agent
 npm.cmd install
-npm.cmd run build:windows
+./build-windows.ps1
 ```
 
-O arquivo será `printer-agent/dist/AtendeAI-Printer-Agent.exe`. Coloque o `config.json` ao lado dele
+O arquivo será `printer-agent/dist/AtendePrint.exe`. Coloque o `config.json` ao lado dele
 (o `build-windows.ps1` copia o `config.sample.json` apenas se o `config.json` ainda não existir).
+
+### Como o ícone é aplicado
+
+O `pkg` não sabe embutir ícone e aplicar o ícone **depois** do empacotamento
+(`rcedit`/`resedit`) destrói o overlay que o `pkg` anexa no fim do arquivo — o `.exe` passa a
+falhar com `Pkg: Error reading from file`. Por isso o `build-windows.ps1`:
+
+1. gera o `assets/AtendePrint.ico` (7 resoluções) a partir do `assets/AtendePrint-Logo.png`
+   com o `gerar-icone.ps1`;
+2. aplica ícone + informações de versão no **binário base do Node** com o
+   `preparar-node-icone.ps1` (fica em `.pkg-node\`, com backup `.bak` intacto);
+3. empacota apontando o `pkg` para esse binário via `PKG_NODE_PATH`.
+
+Só o passo 3 depende do `pkg`; os passos 1 e 2 são scripts PowerShell comuns.
 
 Alternativa sem instalador:
 

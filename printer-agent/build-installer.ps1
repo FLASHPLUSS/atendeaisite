@@ -8,10 +8,12 @@ foreach ($nodeDir in @("$env:ProgramFiles\nodejs", "${env:ProgramFiles(x86)}\nod
   }
 }
 
-if (-not (Test-Path 'dist\AtendeAI-Printer-Agent.exe')) {
-  Write-Host 'Gerando o executavel do agente com pkg...'
-  & npm.cmd install
+if (-not (Test-Path 'dist\AtendePrint.exe')) {
+  Write-Host 'Gerando o executavel do agente com o pkg...'
+  & npm.cmd install --no-audit --no-fund
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'gerar-icone.ps1')
   & npm.cmd run build:windows
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'aplicar-icone-exe.ps1')
 }
 
 $compiler = Get-Command iscc.exe -ErrorAction SilentlyContinue
@@ -30,7 +32,7 @@ if (-not $compilerPath) {
 
 & $compilerPath 'installer.iss'
 
-$setup = Get-ChildItem 'dist\installer\AtendeAI-Printer-Agent-Setup*.exe' -ErrorAction SilentlyContinue |
+$setup = Get-ChildItem 'dist\installer\AtendePrint-Setup*.exe' -ErrorAction SilentlyContinue |
   Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($setup) {
   Write-Host ''

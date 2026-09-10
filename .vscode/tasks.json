@@ -60,7 +60,7 @@
 		{
 			"label": "Reiniciar agente",
 			"type": "shell",
-			"command": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_Process -Filter \\\"Name = 'node.exe'\\\" | Where-Object { $_.CommandLine -like '*printer-agent*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; Stop-ScheduledTask -TaskName 'AtendeAI Printer Agent' -ErrorAction SilentlyContinue; Remove-Item printer-agent\\agent.log -Force -ErrorAction SilentlyContinue; Start-ScheduledTask -TaskName 'AtendeAI Printer Agent'; Start-Sleep -Seconds 3; Get-Content printer-agent\\agent.log -ErrorAction SilentlyContinue\"",
+			"command": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_Process -Filter \\\"Name = 'node.exe'\\\" | Where-Object { $_.CommandLine -like '*printer-agent*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; Stop-ScheduledTask -TaskName 'AtendePrint' -ErrorAction SilentlyContinue; Remove-Item printer-agent\\agent.log -Force -ErrorAction SilentlyContinue; Start-ScheduledTask -TaskName 'AtendePrint'; Start-Sleep -Seconds 3; Get-Content printer-agent\\agent.log -ErrorAction SilentlyContinue\"",
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "none"

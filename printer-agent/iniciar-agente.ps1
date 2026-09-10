@@ -14,7 +14,7 @@ $raiz = Split-Path $PSScriptRoot -Parent
 $log = Join-Path $PSScriptRoot 'agent.log'
 Set-Location $raiz
 
-Write-Host "AtendeAI Printer Agent iniciando..." -ForegroundColor Cyan
+Write-Host "AtendePrint - Agente de Impressao AtendeAI iniciando..." -ForegroundColor Cyan
 Write-Host "Node: $node"
 Write-Host "Config: $PSScriptRoot\config.json"
 Write-Host "Log: $log"

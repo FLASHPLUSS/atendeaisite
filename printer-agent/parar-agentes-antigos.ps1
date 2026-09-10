@@ -5,13 +5,16 @@
 
 $removido = $false
 
-# 1) Remove a tarefa agendada do Windows, se existir.
-$tarefa = Get-ScheduledTask -TaskName 'AtendeAI Printer Agent' -ErrorAction SilentlyContinue
-if ($tarefa) {
-  Stop-ScheduledTask -TaskName 'AtendeAI Printer Agent' -ErrorAction SilentlyContinue
-  Unregister-ScheduledTask -TaskName 'AtendeAI Printer Agent' -Confirm:$false -ErrorAction SilentlyContinue
-  Write-Host 'Tarefa agendada "AtendeAI Printer Agent" removida.'
-  $removido = $true
+# 1) Remove as tarefas agendadas antigas, se existirem (nome antigo e novo).
+$tarefas = @('AtendeAI Printer Agent', 'AtendePrint')
+foreach ($nomeTarefa in $tarefas) {
+  $tarefa = Get-ScheduledTask -TaskName $nomeTarefa -ErrorAction SilentlyContinue
+  if ($tarefa) {
+    Stop-ScheduledTask -TaskName $nomeTarefa -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $nomeTarefa -Confirm:$false -ErrorAction SilentlyContinue
+    Write-Host "Tarefa agendada `"$nomeTarefa`" removida."
+    $removido = $true
+  }
 }
 
 # 2) Encerra agentes rodando via Node (a partir do repositorio).
@@ -24,7 +27,7 @@ foreach ($processo in $nodeAgentes) {
 }
 
 # 3) Encerra agentes ja instalados (executavel), para liberar o arquivo na atualizacao.
-$exeAgentes = Get-Process -Name 'AtendeAI-Printer-Agent' -ErrorAction SilentlyContinue
+$exeAgentes = Get-Process -Name 'AtendePrint', 'AtendeAI-Printer-Agent' -ErrorAction SilentlyContinue
 foreach ($processo in $exeAgentes) {
   Stop-Process -Id $processo.Id -Force -ErrorAction SilentlyContinue
   Write-Host "Agente instalado encerrado (PID $($processo.Id))."

@@ -34,6 +34,42 @@ function firstValue(...values) {
   return values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
 }
 
+// Dois agentes na mesma maquina disputam a mesma fila e um pedido pode ficar preso em "printing".
+// O arquivo de trava guarda o PID de quem esta rodando; se o processo morreu, a trava e ignorada.
+const lockFile = path.join(runtimeDirectory, '.agent.lock');
+
+function processIsAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
+}
+
+async function acquireSingleInstanceLock() {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await fs.writeFile(lockFile, String(process.pid), { flag: 'wx' });
+      return true;
+    } catch (error) {
+      if (error.code !== 'EEXIST') return true;
+      const previous = Number((await fs.readFile(lockFile, 'utf8').catch(() => '')).trim());
+      if (previous && previous !== process.pid && processIsAlive(previous)) {
+        console.warn(`[aviso] Ja existe um agente rodando (PID ${previous}). Encerrando este para nao imprimir em duplicidade.`);
+        return false;
+      }
+      await fs.rm(lockFile, { force: true });
+    }
+  }
+  return true;
+}
+
+async function releaseSingleInstanceLock() {
+  const owner = Number((await fs.readFile(lockFile, 'utf8').catch(() => '')).trim());
+  if (owner === process.pid) await fs.rm(lockFile, { force: true });
+}
+
 // Precedência: variável de ambiente > config.json local > configuração salva no painel.
 // O que está definido localmente nunca é sobrescrito pela configuração da plataforma,
 // porque o hardware (nome da impressora, IP, largura do papel) é específico deste PC.
@@ -158,7 +194,7 @@ const programName = process.pkg ? path.basename(process.execPath) : 'node agent.
 const commandHint = process.pkg ? `"${programName}"` : programName;
 
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
-  console.log(`AtendeAI Printer Agent
+  console.log(`AtendePrint - Agente de Impressao AtendeAI
 
 Uso:
   ${commandHint}                     Inicia o agente e busca pedidos na plataforma
@@ -195,7 +231,13 @@ PRINTER_HOST, PRINTER_PORT, PRINTER_COLUMNS, ATENDEAI_POLL_MS`);
     process.exitCode = 1;
   }
 } else {
-  console.log(`AtendeAI Printer Agent | servidor: ${apiUrl}`);
+  if (!(await acquireSingleInstanceLock())) process.exit(0);
+  const encerrar = async () => { await releaseSingleInstanceLock(); process.exit(0); };
+  process.on('SIGINT', encerrar);
+  process.on('SIGTERM', encerrar);
+  process.on('exit', () => { fs.rm(lockFile, { force: true }).catch(() => {}); });
+
+  console.log(`AtendePrint - Agente de Impressao AtendeAI | servidor: ${apiUrl}`);
   if (loadedConfigPath) console.log(`[config] arquivo lido: ${loadedConfigPath}`);
   if (configError && !process.env.ATENDEAI_API_URL) console.warn(`[config] ${configError} em ${runtimeDirectory}: usando ${apiUrl}. Veja printer-agent/README.md.`);
   await loadPanelSettings();

@@ -1,7 +1,13 @@
-#define AppName "AtendeAI Printer Agent"
+; Instalador do AtendePrint - agente de impressao do painel AtendeAI.
+; Gera um .exe que instala o agente, descobre as impressoras do PC e ja cria o
+; inicio automatico no Windows. Compilar com: ISCC.exe installer.iss
+; (ou rode build-installer.ps1, que cuida disso).
+
+#define AppName "AtendePrint"
 #define AppVersion "2.0.0"
 #define AppPublisher "AtendeAI"
-#define AppExeName "AtendeAI-Printer-Agent.exe"
+#define AppExeName "AtendePrint.exe"
+#define AppIcon "assets\AtendePrint.ico"
 #define CleanupScript "parar-agentes-antigos.ps1"
 #define PrinterListScript "listar-impressoras.ps1"
 
@@ -10,25 +16,31 @@ AppId={{B7A0C6D6-4F1C-4A13-9CF3-1234567890AB}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
-DefaultDirName={localappdata}\AtendeAI\PrinterAgent
+DefaultDirName={localappdata}\AtendeAI\AtendePrint
 DisableProgramGroupPage=yes
 OutputDir=dist\installer
-OutputBaseFilename=AtendeAI-Printer-Agent-Setup-v{#AppVersion}
+OutputBaseFilename=AtendePrint-Setup-v{#AppVersion}
+SetupIconFile={#AppIcon}
+UninstallDisplayIcon={app}\{#AppExeName}
+UninstallDisplayName={#AppName}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 
+[Languages]
+Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
+
 [Files]
 Source: "dist\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#CleanupScript}"; DestDir: "{app}"; Flags: ignoreversion
 ; Usado apenas durante o assistente para descobrir as impressoras instaladas.
-Source: "listar-impressoras.ps1"; Flags: dontcopy
+Source: "{#PrinterListScript}"; Flags: dontcopy
 
 [Icons]
-Name: "{userstartup}\AtendeAI Printer Agent"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
-Name: "{autodesktop}\AtendeAI Printer Agent"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na Area de Trabalho"; GroupDescription: "Atalhos adicionais:"
@@ -36,6 +48,7 @@ Name: "desktopicon"; Description: "Criar atalho na Area de Trabalho"; GroupDescr
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\output"
 Type: files; Name: "{app}\config.json"
+Type: files; Name: "{app}\.agent.lock"
 
 [UninstallRun]
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#AppExeName}"; Flags: runhidden; RunOnceId: "EncerrarAgente"
@@ -56,7 +69,7 @@ var
   ResultCode: Integer;
   i: Integer;
 begin
-  ConfigPage := CreateInputQueryPage(wpWelcome, 'Conexao com a plataforma', 'Configure o agente de impressao', 'Informe o endereco da sua plataforma AtendeAI.');
+  ConfigPage := CreateInputQueryPage(wpWelcome, 'Conexao com a plataforma', 'Configure o AtendePrint', 'Informe o endereco da sua plataforma AtendeAI.');
   ConfigPage.Add('URL da plataforma:', False);
   ConfigPage.Values[0] := 'https://www.anota.ai.venusdev.xyz';
 

@@ -1,7 +1,7 @@
 # Coloca o agente de impressao para iniciar junto com o Windows.
 # Nao precisa de administrador: cria uma tarefa agendada do usuario atual.
 # Para remover depois:
-#   Unregister-ScheduledTask -TaskName 'AtendeAI Printer Agent' -Confirm:$false
+#   Unregister-ScheduledTask -TaskName 'AtendePrint' -Confirm:$false
 $ErrorActionPreference = 'Stop'
 
 $script = Join-Path $PSScriptRoot 'iniciar-agente.ps1'
@@ -18,7 +18,7 @@ if (-not (Test-Path $node)) {
 }
 
 $raiz = Split-Path $PSScriptRoot -Parent
-$nomeTarefa = 'AtendeAI Printer Agent'
+$nomeTarefa = 'AtendePrint'
 
 $acao = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`"" -WorkingDirectory $raiz
 $gatilho = New-ScheduledTaskTrigger -AtLogOn
