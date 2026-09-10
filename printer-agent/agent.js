@@ -21,7 +21,7 @@ for (const candidate of configCandidates) {
     loadedConfigPath = candidate;
     break;
   } catch (error) {
-    configError = error.code === 'ENOENT' ? 'config.json não encontrado' : `config.json inválido (${error.message})`;
+    configError = error.code === 'ENOENT' ? 'config.json nao encontrado' : `config.json invalido (${error.message})`;
   }
 }
 const apiUrl = (process.env.ATENDEAI_API_URL || savedConfig.apiUrl || 'http://localhost:3000').replace(/\/$/, '');
@@ -80,7 +80,7 @@ async function loadPanelSettings() {
 }
 
 async function warnMissingPrinter() {
-  console.warn('[config] O modo USB está ativo, mas nenhuma impressora do Windows foi informada.');
+  console.warn('[config] O modo USB esta ativo, mas nenhuma impressora do Windows foi informada.');
   try {
     const printers = await listWindowsPrinters();
     if (printers.length) console.log(`[config] Impressoras instaladas neste PC: ${printers.join(' | ')}`);
@@ -100,7 +100,7 @@ async function request(endpoint, options = {}) {
   if (!response.ok) {
     // Servidor antigo: a rota cai no manipulador do WhatsApp e responde esse erro.
     if (response.status === 400 && data.message?.includes('nome do restaurante')) {
-      throw new Error('A VPS está com uma versão antiga e ainda não possui as rotas de impressão. Atualize o servidor AtendeAI.');
+      throw new Error('A VPS esta com uma versao antiga e ainda nao possui as rotas de impressao. Atualize o servidor AtendeAI.');
     }
     throw new Error(data.message || `Servidor respondeu ${response.status}.`);
   }
@@ -125,7 +125,7 @@ async function printJob(job) {
     await printEscPos(receipt, { host: settings.printerHost, port: settings.printerPort });
     return console.log(`[escpos] Pedido ${job.order_number} enviado para ${settings.printerHost}:${settings.printerPort}.`);
   }
-  throw new Error(`Modo de impressão desconhecido: ${settings.mode}. Use virtual, usb ou escpos.`);
+  throw new Error(`Modo de impressao desconhecido: ${settings.mode}. Use virtual, usb ou escpos.`);
 }
 
 async function poll() {
@@ -165,12 +165,12 @@ Uso:
   ${commandHint} --test              Envia um cupom de teste usando o modo configurado
   ${commandHint} --list-printers     Lista as impressoras instaladas no Windows
 
-Modos de impressão (config.json ou variáveis de ambiente):
+Modos de impressao (config.json ou variaveis de ambiente):
   virtual   Salva o cupom em .txt na pasta output (teste sem impressora)
   usb       Envia ESC/POS bruto para uma impressora instalada no Windows (USB)
   escpos    Envia ESC/POS bruto para uma impressora de rede (IP:porta)
 
-Variáveis de ambiente: ATENDEAI_API_URL, ATENDEAI_PRINT_MODE, PRINTER_NAME,
+Variaveis de ambiente: ATENDEAI_API_URL, ATENDEAI_PRINT_MODE, PRINTER_NAME,
 PRINTER_HOST, PRINTER_PORT, PRINTER_COLUMNS, ATENDEAI_POLL_MS`);
 } else if (process.argv.includes('--list-printers')) {
   try {
