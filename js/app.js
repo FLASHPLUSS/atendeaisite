@@ -6,7 +6,7 @@ import { configuracoesView } from '../css/js/views/configuracoes.js';
 import { relatoriosView } from '../css/js/views/relatorios.js';
 import { agenteIaView } from '../css/js/views/agente-ia.js';
 import { connectWhatsApp, disconnectWhatsApp, getConnectionState } from '../css/js/services/evolution-api.js';
-import { connectRealtime, createMenuItem, createPrintJob, deleteMenuItem, deletePrintJob, getMenuItems, getOrders, getPhysicalMenu, getRestaurantSettings, savePhysicalMenu, updateMenuItem, updatePrintJob, updateRestaurantSettings } from '../css/js/services/data-api.js';
+import { connectRealtime, createMenuItem, createPrintJob, deleteMenuItem, deletePrintJob, getMenuItems, getOrders, getPhysicalMenu, getPrinterConfig, getRestaurantSettings, savePhysicalMenu, updateMenuItem, updatePrintJob, updateRestaurantSettings } from '../css/js/services/data-api.js';
 
 const app = document.querySelector('#app');
 const routes = { inicio: dashboardView, pedidos: pedidosView, loja: lojaView, cardapio: cardapioView, relatorios: relatoriosView, configuracoes: configuracoesView, 'agente-ia': agenteIaView };
@@ -729,22 +729,36 @@ function bindSettings() {
 
   if (printerSection) {
     const modeInput = printerSection.querySelector('#printer-mode');
+    const nameInput = printerSection.querySelector('#printer-name');
     const hostInput = printerSection.querySelector('#printer-host');
     const portInput = printerSection.querySelector('#printer-port');
+    const columnsInput = printerSection.querySelector('#printer-columns');
     const pollInput = printerSection.querySelector('#printer-poll');
     const saveButton = printerSection.querySelector('#printer-save-button');
     const testButton = printerSection.querySelector('#printer-test-button');
     const feedback = printerSection.querySelector('#printer-save-feedback');
+    const statusText = printerSection.querySelector('#printer-agent-status-text');
     const stored = JSON.parse(localStorage.getItem('atende-printer-config') || '{}');
-    if (stored.mode) modeInput.value = stored.mode;
-    if (stored.host) hostInput.value = stored.host;
-    if (stored.port) portInput.value = stored.port;
-    if (stored.pollSeconds) pollInput.value = stored.pollSeconds;
-    const updateHostState = () => { printerSection.querySelector('.printer-settings-host').hidden = modeInput.value !== 'escpos'; };
-    modeInput.addEventListener('change', updateHostState);
-    updateHostState();
+    const applyPrinter = (printer = {}) => {
+      if (printer.mode) modeInput.value = printer.mode;
+      if (printer.printerName) nameInput.value = printer.printerName;
+      if (printer.host) hostInput.value = printer.host;
+      if (printer.port) portInput.value = printer.port;
+      if (printer.columns) columnsInput.value = String(printer.columns);
+      if (printer.pollSeconds) pollInput.value = printer.pollSeconds;
+    };
+    applyPrinter(stored);
+    const updateModeState = () => {
+      const mode = modeInput.value;
+      printerSection.querySelector('.printer-settings-name').hidden = mode !== 'usb';
+      printerSection.querySelector('.printer-settings-host').hidden = mode !== 'escpos';
+      if (statusText) statusText.textContent = mode === 'usb' ? 'A impressora USB precisa estar instalada neste computador.' : mode === 'escpos' ? 'A impressora de rede precisa estar acessível pelo IP informado.' : 'Modo de teste: os cupons são salvos em arquivos .txt.';
+    };
+    modeInput.addEventListener('change', updateModeState);
+    updateModeState();
+    if (!Object.keys(stored).length) getPrinterConfig().then((remote) => { applyPrinter(remote); updateModeState(); }).catch(() => {});
     saveButton.addEventListener('click', () => {
-      const printer = { mode: modeInput.value, host: hostInput.value.trim(), port: Number(portInput.value), pollSeconds: Number(pollInput.value) };
+      const printer = { mode: modeInput.value, printerName: nameInput.value.trim(), host: hostInput.value.trim(), port: Number(portInput.value), columns: Number(columnsInput.value), pollSeconds: Number(pollInput.value) };
       localStorage.setItem('atende-printer-config', JSON.stringify(printer));
       updateRestaurantSettings({ printer }).then(() => { feedback.textContent = 'Configuração salva no servidor.'; }).catch((error) => { feedback.textContent = `Salvo localmente. Servidor: ${error.message}`; });
     });

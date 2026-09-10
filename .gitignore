@@ -1,5 +1,15 @@
 .env
 node_modules/
-.env
 printer-agent/output/
 printer-agent/dist/
+printer-agent/config.json
+
+# log do agente de impressao
+printer-agent/agent.log
+*.log
+
+# clone antigo do repositorio dentro do projeto (nao versionar)
+atendeaisite/
+
+# worktrees/agentes locais
+.kilo/

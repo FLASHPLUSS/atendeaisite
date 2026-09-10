@@ -43,17 +43,21 @@ begin
   ConfigPage.Add('URL da plataforma:', False);
   ConfigPage.Values[0] := 'https://www.anota.ai.venusdev.xyz';
 
-  ModePage := CreateInputOptionPage(ConfigPage.ID, 'Modo de impressao', 'Escolha como deseja testar', 'Voce pode trocar este modo depois editando config.json.', True, False);
+  ModePage := CreateInputOptionPage(ConfigPage.ID, 'Modo de impressao', 'Escolha como deseja imprimir', 'Voce pode trocar este modo depois editando config.json.', True, False);
   ModePage.Add('Virtual (teste sem impressora)');
   ModePage.Add('ESC/POS por rede');
-  ModePage.SelectedValueIndex := 0;
+  ModePage.Add('USB / Windows (impressora instalada neste PC)');
+  ModePage.SelectedValueIndex := 2;
 
-  PrinterPage := CreateInputQueryPage(ModePage.ID, 'Impressora ESC/POS', 'Dados opcionais da impressora de rede', 'No modo virtual, deixe o IP vazio. Preencha somente para ESC/POS por rede.');
-  PrinterPage.Add('IP ou hostname (deixe vazio no modo virtual):', False);
+  PrinterPage := CreateInputQueryPage(ModePage.ID, 'Impressora', 'Dados da impressora', 'Preencha apenas o modo escolhido. No modo virtual deixe tudo vazio.');
+  PrinterPage.Add('Nome da impressora no Windows (modo USB):', False);
+  PrinterPage.Add('IP ou hostname (modo ESC/POS por rede):', False);
   PrinterPage.Add('Porta:', False);
+  PrinterPage.Add('Largura do cupom em colunas (42 = 80mm, 32 = 58mm):', False);
   PrinterPage.Add('Intervalo de busca (segundos):', False);
-  PrinterPage.Values[1] := '9100';
-  PrinterPage.Values[2] := '5';
+  PrinterPage.Values[2] := '9100';
+  PrinterPage.Values[3] := '42';
+  PrinterPage.Values[4] := '5';
 end;
 
 function JsonEscape(Value: String): String;
@@ -70,15 +74,19 @@ var
   ResultCode: Integer;
 begin
   if CurStep <> ssPostInstall then Exit;
-  if ModePage.SelectedValueIndex = 1 then Mode := 'escpos' else Mode := 'virtual';
+  if ModePage.SelectedValueIndex = 2 then Mode := 'usb'
+  else if ModePage.SelectedValueIndex = 1 then Mode := 'escpos'
+  else Mode := 'virtual';
   ConfigFile := ExpandConstant('{app}\config.json');
   SaveStringToFile(ConfigFile,
     '{' + #13#10 +
     '  "apiUrl": "' + JsonEscape(ConfigPage.Values[0]) + '",' + #13#10 +
     '  "mode": "' + Mode + '",' + #13#10 +
-    '  "pollSeconds": ' + PrinterPage.Values[2] + ',' + #13#10 +
-    '  "printerHost": "' + JsonEscape(PrinterPage.Values[0]) + '",' + #13#10 +
-    '  "printerPort": ' + PrinterPage.Values[1] + #13#10 +
+    '  "printerName": "' + JsonEscape(PrinterPage.Values[0]) + '",' + #13#10 +
+    '  "columns": ' + PrinterPage.Values[3] + ',' + #13#10 +
+    '  "pollSeconds": ' + PrinterPage.Values[4] + ',' + #13#10 +
+    '  "printerHost": "' + JsonEscape(PrinterPage.Values[1]) + '",' + #13#10 +
+    '  "printerPort": ' + PrinterPage.Values[2] + #13#10 +
     '}' + #13#10, False);
   Exec(ExpandConstant('{app}\{#AppExeName}'), '', ExpandConstant('{app}'), SW_HIDE, ewNoWait, ResultCode);
 end;

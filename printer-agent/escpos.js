@@ -1,14 +1,24 @@
 import net from 'node:net';
 
+// Impressoras termicas trabalham com codepages fixas (CP437/CP850/CP860) e nao
+// entendem UTF-8. Removemos os acentos para o cupom nunca sair com lixo.
+export function toAscii(value) {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\t\n\r\x20-\x7e]/g, '?');
+}
+
 function esc(value) {
-  return Buffer.from(value, 'ascii');
+  return Buffer.from(toAscii(value), 'ascii');
 }
 
 export function formatEscPos(receipt) {
   return Buffer.concat([
-    Buffer.from([0x1b, 0x40]),
+    Buffer.from([0x1b, 0x40]), // ESC @ - inicializa a impressora
     esc(receipt),
-    Buffer.from([0x1d, 0x56, 0x00]),
+    Buffer.from([0x1b, 0x64, 0x03]), // ESC d 3 - avanca 3 linhas antes do corte
+    Buffer.from([0x1d, 0x56, 0x00]), // GS V 0 - corte total do papel
   ]);
 }
 

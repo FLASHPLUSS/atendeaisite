@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRealtimeServer } from './websocket.js';
-import { createMenuItem, createPrintJob, deleteMenuItem, deletePrintJob, getPhysicalMenu, getRestaurant, listMenu, listOrders, listPendingPrintJobs, migrate, pool, savePhysicalMenu, updateMenuItem, updatePrintJob, updateSettings } from './db.js';
+import { createMenuItem, createPrintJob, deleteMenuItem, deletePrintJob, getPhysicalMenu, getPrinterSettings, getRestaurant, listMenu, listOrders, listPendingPrintJobs, migrate, pool, savePhysicalMenu, updateMenuItem, updatePrintJob, updateSettings } from './db.js';
 
 const currentFile = fileURLToPath(import.meta.url);
 const servicesDirectory = path.dirname(currentFile);
@@ -97,6 +97,10 @@ async function handleApi(request, response, url) {
   if (url.pathname === '/api/orders' && request.method === 'GET') {
     requireDatabase();
     return sendJson(response, 200, { orders: await listOrders() });
+  }
+  if (url.pathname === '/api/printer-config' && request.method === 'GET') {
+    requireDatabase();
+    return sendJson(response, 200, await getPrinterSettings());
   }
   if (url.pathname === '/api/print-jobs' && request.method === 'POST') {
     requireDatabase();

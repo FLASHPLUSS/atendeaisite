@@ -1,6 +1,6 @@
 param(
   [string]$ApiUrl = 'https://www.anota.ai.venusdev.xyz',
-  [ValidateSet('virtual', 'escpos')][string]$Mode = 'virtual',
+  [ValidateSet('virtual', 'usb', 'escpos')][string]$Mode = 'usb', [string]$PrinterName = '', [int]$Columns = 42,
   [string]$PrinterHost = '',
   [int]$PrinterPort = 9100,
   [int]$PollSeconds = 5
@@ -14,10 +14,10 @@ New-Item -ItemType Directory -Force -Path (Join-Path $installDirectory 'output')
 @{
   apiUrl = $ApiUrl
   mode = $Mode
-  pollSeconds = $PollSeconds
+  printerName = $PrinterName; columns = $Columns; pollSeconds = $PollSeconds
   printerHost = $PrinterHost
   printerPort = $PrinterPort
-} | ConvertTo-Json | Set-Content (Join-Path $installDirectory 'config.json') -Encoding UTF8
+} | ConvertTo-Json | ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $installDirectory 'config.json'), $_, (New-Object System.Text.UTF8Encoding($false))) }
 
 $taskName = 'AtendeAI Printer Agent'
 $action = New-ScheduledTaskAction -Execute (Join-Path $installDirectory 'AtendeAI-Printer-Agent.exe') -WorkingDirectory $installDirectory
@@ -25,4 +25,4 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn
 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
-Write-Host "Agente instalado e iniciado em $installDirectory"
+Write-Host "Agente instalado e iniciado em $installDirectory"; if (-not $PrinterName) { Write-Host ''; Write-Host 'Impressoras instaladas neste Windows:' -ForegroundColor Yellow; Get-Printer | Select-Object -ExpandProperty Name | ForEach-Object { Write-Host "  - $_" }; Write-Host 'Preencha "printerName" no config.json com o nome exato.' -ForegroundColor Yellow }

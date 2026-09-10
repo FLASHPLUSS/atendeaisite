@@ -168,6 +168,13 @@ export async function createPrintJob(payload) {
 
 export async function listPendingPrintJobs() {
   const restaurant = await getRestaurant();
+  // Se o agente caiu no meio de uma impressão o pedido ficaria preso em "printing"
+  // para sempre. Depois de 10 minutos o pedido volta para a fila.
+  await pool.query(
+    `UPDATE print_jobs SET status = 'pending'
+     WHERE restaurant_id = $1 AND status = 'printing' AND created_at < NOW() - INTERVAL '10 minutes'`,
+    [restaurant.id],
+  );
   const result = await pool.query(
     `UPDATE print_jobs SET status = 'printing'
      WHERE id IN (SELECT id FROM print_jobs WHERE restaurant_id = $1 AND status = 'pending' ORDER BY created_at LIMIT 10)
@@ -175,6 +182,12 @@ export async function listPendingPrintJobs() {
     [restaurant.id],
   );
   return result.rows;
+}
+
+export async function getPrinterSettings() {
+  const restaurant = await getRestaurant();
+  const result = await pool.query('SELECT printer FROM restaurant_settings WHERE restaurant_id = $1', [restaurant.id]);
+  return { restaurantName: restaurant.name, ...(result.rows[0]?.printer || {}) };
 }
 
 export async function updatePrintJob(id, payload) {

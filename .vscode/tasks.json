@@ -1,0 +1,77 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Painel: iniciar servidor",
+			"type": "shell",
+			"command": "npm start",
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Agente: instalar inicio automatico",
+			"type": "shell",
+			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File printer-agent\\instalar-inicio-automatico.ps1",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "Agente: iniciar em primeiro plano (com log)",
+			"type": "shell",
+			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File printer-agent\\iniciar-agente.ps1",
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "Agente: testar impressao",
+			"type": "shell",
+			"command": "\"C:\\Program Files\\nodejs\\node.exe\" printer-agent/agent.js --test",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "Agente: enviar pedido de teste",
+			"type": "shell",
+			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File printer-agent\\enviar-teste.ps1",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "Impressora: diagnosticar (sem Node)",
+			"type": "shell",
+			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File printer-agent\\printer-info.ps1",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "Impressora: listar nomes (sem Node)",
+			"type": "shell",
+			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File printer-agent\\list-printers.ps1",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "Reiniciar agente",
+			"type": "shell",
+			"command": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_Process -Filter \\\"Name = 'node.exe'\\\" | Where-Object { $_.CommandLine -like '*printer-agent*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; Stop-ScheduledTask -TaskName 'AtendeAI Printer Agent' -ErrorAction SilentlyContinue; Remove-Item printer-agent\\agent.log -Force -ErrorAction SilentlyContinue; Start-ScheduledTask -TaskName 'AtendeAI Printer Agent'; Start-Sleep -Seconds 3; Get-Content printer-agent\\agent.log -ErrorAction SilentlyContinue\"",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "Teste final ponta a ponta",
+			"type": "shell",
+			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File printer-agent\\enviar-teste.ps1; Start-Sleep -Seconds 8; Get-Content printer-agent\\agent.log",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		}
+	]
+}

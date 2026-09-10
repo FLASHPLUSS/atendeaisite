@@ -40,6 +40,10 @@ export function getOrders() {
   return request('/api/orders');
 }
 
+export function getPrinterConfig() {
+  return request('/api/printer-config');
+}
+
 export function getRestaurantSettings() {
   return request('/api/settings');
 }
