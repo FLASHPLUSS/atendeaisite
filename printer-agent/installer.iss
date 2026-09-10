@@ -1,7 +1,9 @@
 #define AppName "AtendeAI Printer Agent"
-#define AppVersion "1.0.0"
+#define AppVersion "2.0.0"
 #define AppPublisher "AtendeAI"
 #define AppExeName "AtendeAI-Printer-Agent.exe"
+#define CleanupScript "parar-agentes-antigos.ps1"
+#define PrinterListScript "listar-impressoras.ps1"
 
 [Setup]
 AppId={{B7A0C6D6-4F1C-4A13-9CF3-1234567890AB}
@@ -11,7 +13,7 @@ AppPublisher={#AppPublisher}
 DefaultDirName={localappdata}\AtendeAI\PrinterAgent
 DisableProgramGroupPage=yes
 OutputDir=dist\installer
-OutputBaseFilename=AtendeAI-Printer-Agent-Setup-v2
+OutputBaseFilename=AtendeAI-Printer-Agent-Setup-v{#AppVersion}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -20,6 +22,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 
 [Files]
 Source: "dist\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#CleanupScript}"; DestDir: "{app}"; Flags: ignoreversion
+; Usado apenas durante o assistente para descobrir as impressoras instaladas.
+Source: "listar-impressoras.ps1"; Flags: dontcopy
 
 [Icons]
 Name: "{userstartup}\AtendeAI Printer Agent"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
@@ -30,14 +35,26 @@ Name: "desktopicon"; Description: "Criar atalho na Area de Trabalho"; GroupDescr
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\output"
+Type: files; Name: "{app}\config.json"
+
+[UninstallRun]
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#AppExeName}"; Flags: runhidden; RunOnceId: "EncerrarAgente"
 
 [Code]
 var
   ConfigPage: TInputQueryWizardPage;
   ModePage: TInputOptionWizardPage;
+  PrinterListPage: TInputOptionWizardPage;
   PrinterPage: TInputQueryWizardPage;
+  ImpressorasDetectadas: TArrayOfString;
+  NomesImpressoras: TArrayOfString;
+  ImpressorasEncontradas: Integer;
 
 procedure InitializeWizard;
+var
+  ListaArquivo: String;
+  ResultCode: Integer;
+  i: Integer;
 begin
   ConfigPage := CreateInputQueryPage(wpWelcome, 'Conexao com a plataforma', 'Configure o agente de impressao', 'Informe o endereco da sua plataforma AtendeAI.');
   ConfigPage.Add('URL da plataforma:', False);
@@ -49,15 +66,48 @@ begin
   ModePage.Add('USB / Windows (impressora instalada neste PC)');
   ModePage.SelectedValueIndex := 2;
 
-  PrinterPage := CreateInputQueryPage(ModePage.ID, 'Impressora', 'Dados da impressora', 'Preencha apenas o modo escolhido. No modo virtual deixe tudo vazio.');
-  PrinterPage.Add('Nome da impressora no Windows (modo USB):', False);
+  { Le as impressoras do proprio PC: evita o usuario digitar o nome exato errado
+    (parenteses, acentos e espacos do nome do Windows sao faceis de errar). }
+  ImpressorasEncontradas := 0;
+  ExtractTemporaryFile('{#PrinterListScript}');
+  ListaArquivo := ExpandConstant('{tmp}\impressoras-detectadas.txt');
+  if Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\{#PrinterListScript}') + '" -OutFile "' + ListaArquivo + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    LoadStringsFromFile(ListaArquivo, ImpressorasDetectadas);
+
+  PrinterListPage := CreateInputOptionPage(ModePage.ID, 'Impressora', 'Escolha a impressora deste PC', 'Impressoras instaladas no Windows, usadas no modo USB.', True, False);
+  SetArrayLength(NomesImpressoras, 0);
+  for i := 0 to GetArrayLength(ImpressorasDetectadas) - 1 do
+    if Trim(ImpressorasDetectadas[i]) <> '' then
+    begin
+      PrinterListPage.Add(Trim(ImpressorasDetectadas[i]));
+      SetArrayLength(NomesImpressoras, ImpressorasEncontradas + 1);
+      NomesImpressoras[ImpressorasEncontradas] := Trim(ImpressorasDetectadas[i]);
+      ImpressorasEncontradas := ImpressorasEncontradas + 1;
+    end;
+  if ImpressorasEncontradas = 0 then PrinterListPage.Add('(nenhuma impressora detectada)');
+  PrinterListPage.SelectedValueIndex := 0;
+
+  PrinterPage := CreateInputQueryPage(PrinterListPage.ID, 'Rede e formato', 'Ajustes de impressao', 'Preencha o IP apenas no modo ESC/POS por rede.');
   PrinterPage.Add('IP ou hostname (modo ESC/POS por rede):', False);
   PrinterPage.Add('Porta:', False);
   PrinterPage.Add('Largura do cupom em colunas (42 = 80mm, 32 = 58mm):', False);
   PrinterPage.Add('Intervalo de busca (segundos):', False);
-  PrinterPage.Values[2] := '9100';
-  PrinterPage.Values[3] := '42';
-  PrinterPage.Values[4] := '5';
+  PrinterPage.Values[1] := '9100';
+  PrinterPage.Values[2] := '42';
+  PrinterPage.Values[3] := '5';
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  { A lista de impressoras so faz sentido no modo USB. }
+  Result := (PageID = PrinterListPage.ID) and (ModePage.SelectedValueIndex <> 2);
+end;
+
+function NomeImpressoraEscolhida: String;
+begin
+  Result := '';
+  if (ImpressorasEncontradas > 0) and (PrinterListPage.SelectedValueIndex >= 0) then
+    Result := NomesImpressoras[PrinterListPage.SelectedValueIndex];
 end;
 
 function JsonEscape(Value: String): String;
@@ -73,6 +123,12 @@ var
   Mode: String;
   ResultCode: Integer;
 begin
+  if CurStep = ssInstall then
+  begin
+    { Libera o .exe antes de copiar, para o instalador conseguir atualizar por cima. }
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exit;
+  end;
   if CurStep <> ssPostInstall then Exit;
   if ModePage.SelectedValueIndex = 2 then Mode := 'usb'
   else if ModePage.SelectedValueIndex = 1 then Mode := 'escpos'
@@ -82,11 +138,14 @@ begin
     '{' + #13#10 +
     '  "apiUrl": "' + JsonEscape(ConfigPage.Values[0]) + '",' + #13#10 +
     '  "mode": "' + Mode + '",' + #13#10 +
-    '  "printerName": "' + JsonEscape(PrinterPage.Values[0]) + '",' + #13#10 +
-    '  "columns": ' + PrinterPage.Values[3] + ',' + #13#10 +
-    '  "pollSeconds": ' + PrinterPage.Values[4] + ',' + #13#10 +
-    '  "printerHost": "' + JsonEscape(PrinterPage.Values[1]) + '",' + #13#10 +
-    '  "printerPort": ' + PrinterPage.Values[2] + #13#10 +
+    '  "printerName": "' + JsonEscape(NomeImpressoraEscolhida) + '",' + #13#10 +
+    '  "columns": ' + PrinterPage.Values[2] + ',' + #13#10 +
+    '  "pollSeconds": ' + PrinterPage.Values[3] + ',' + #13#10 +
+    '  "printerHost": "' + JsonEscape(PrinterPage.Values[0]) + '",' + #13#10 +
+    '  "printerPort": ' + PrinterPage.Values[1] + #13#10 +
     '}' + #13#10, False);
+  { Evita dois agentes disputando a mesma fila: remove a tarefa agendada antiga
+    e encerra os agentes que rodavam a partir da pasta do projeto. }
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\{#CleanupScript}') + '"', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec(ExpandConstant('{app}\{#AppExeName}'), '', ExpandConstant('{app}'), SW_HIDE, ewNoWait, ResultCode);
 end;

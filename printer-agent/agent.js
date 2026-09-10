@@ -153,13 +153,17 @@ function testJob() {
   return { id: 'teste', order_number: 'TESTE-001', created_at: new Date().toISOString(), payload: { items: [{ quantity: 2, name: 'X-Burger', price: 25 }], total: 50, notes: 'Teste pelo agente' } };
 }
 
+// No .exe empacotado nao existe "node agent.js": os exemplos usam o nome do proprio executavel.
+const programName = process.pkg ? path.basename(process.execPath) : 'node agent.js';
+const commandHint = process.pkg ? `"${programName}"` : programName;
+
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
   console.log(`AtendeAI Printer Agent
 
 Uso:
-  node agent.js                     Inicia o agente e busca pedidos na plataforma
-  node agent.js --test              Envia um cupom de teste usando o modo configurado
-  node agent.js --list-printers     Lista as impressoras instaladas no Windows
+  ${commandHint}                     Inicia o agente e busca pedidos na plataforma
+  ${commandHint} --test              Envia um cupom de teste usando o modo configurado
+  ${commandHint} --list-printers     Lista as impressoras instaladas no Windows
 
 Modos de impressão (config.json ou variáveis de ambiente):
   virtual   Salva o cupom em .txt na pasta output (teste sem impressora)

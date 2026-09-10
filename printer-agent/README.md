@@ -110,6 +110,8 @@ A configuração salva no painel (`/api/printer-config`) só preenche o que **n�
 | `iniciar-agente.ps1` | Roda o agente em primeiro plano gravando tudo em `printer-agent/agent.log` (UTF-8). |
 | `enviar-teste.ps1` | Cria um pedido de teste na plataforma para conferir a impressão de ponta a ponta. |
 | `list-printers.ps1` | Lista os nomes exatos das impressoras do Windows (não precisa de Node.js). |
+| `listar-impressoras.ps1` | Igual ao anterior, mas grava o resultado em um arquivo (`-OutFile`). É o que o instalador usa para montar a lista de impressoras. |
+| `parar-agentes-antigos.ps1` | Remove a tarefa agendada antiga e encerra agentes que rodavam pela pasta do projeto, evitando dois agentes na mesma fila. |
 | `printer-info.ps1` | Diagnóstico: serviço de spooler, impressoras, portas e fila de impressão. |
 
 Uso típico:
@@ -147,7 +149,75 @@ O agente monta o cupom em ESC/POS (bytes crus) e envia direto ao spooler do Wind
 Não é preciso instalar nenhum módulo nativo do Node. Os acentos são removidos automaticamente
 porque impressoras térmicas usam codepages fixas (CP437/CP850) e não entendem UTF-8.
 
-## Gerar o executável
+## Instalador `.exe` (recomendado para o cliente)
+
+O instalador é a forma mais simples: ele já leva dentro de si o executável do agente, **não precisa de
+Node.js** e **não depende da pasta do projeto** no computador do restaurante.
+
+Para gerar:
+
+```powershell
+Set-Location printer-agent
+./build-installer.ps1
+```
+
+> Se aparecer *"a execução de scripts foi desabilitada neste sistema"*, rode liberando apenas esta janela
+> (não muda nada no Windows de forma permanente):
+>
+> ```powershell
+> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+> ```
+>
+> Ou chame direto, sem mexer em configuração nenhuma:
+>
+> ```powershell
+> powershell -NoProfile -ExecutionPolicy Bypass -File printer-agent\build-installer.ps1
+> ```
+
+O script instala as dependências, compila o agente com o `pkg` (se ainda não existir) e roda o
+Inno Setup. O arquivo final fica em:
+
+```
+printer-agent/dist/installer/AtendeAI-Printer-Agent-Setup-v2.0.0.exe
+```
+
+### O que o assistente faz
+
+1. **Conexão** – pede a URL da plataforma (já vem preenchida com o endereço atual).
+2. **Modo de impressão** – `Virtual`, `ESC/POS por rede` ou `USB / Windows` (já vem marcado USB).
+3. **Impressora** – lê as impressoras instaladas neste PC e mostra uma **lista para escolher**,
+   em vez de obrigar o usuário a digitar o nome exato (era aí que a impressão quebrava antes).
+   Esta tela só aparece no modo USB.
+4. **Rede e formato** – IP/hostname (só no modo rede), porta, largura do cupom (`42` = 80 mm,
+   `32` = 58 mm) e o intervalo de busca em segundos.
+
+Ao concluir, o instalador:
+
+- encerra um agente que já esteja aberto (`taskkill`);
+- copia o `AtendeAI-Printer-Agent.exe` e o `parar-agentes-antigos.ps1` para
+  `%LOCALAPPDATA%\AtendeAI\PrinterAgent` (não precisa de administrador);
+- grava o `config.json` na mesma pasta com as respostas do assistente;
+- roda `parar-agentes-antigos.ps1`, que remove a antiga **tarefa agendada** e encerra agentes
+  iniciados a partir da pasta do projeto — isso evita **dois agentes disputando a mesma fila**;
+- cria o atalho de inicialização automática e já abre o agente.
+
+### Onde ficam as coisas depois de instalado
+
+| Item | Caminho |
+| --- | --- |
+| Executável e `config.json` | `%LOCALAPPDATA%\AtendeAI\PrinterAgent` |
+| Cupons do modo `virtual` | `%LOCALAPPDATA%\AtendeAI\PrinterAgent\output` |
+| Início automático | atalho em `shell:startup` |
+| Desinstalar | "Aplicativos instalados" do Windows → **AtendeAI Printer Agent** |
+
+Para diagnosticar depois de instalado, sem depender de Node.js:
+
+```powershell
+& "$env:LOCALAPPDATA\AtendeAI\PrinterAgent\AtendeAI-Printer-Agent.exe" --list-printers
+& "$env:LOCALAPPDATA\AtendeAI\PrinterAgent\AtendeAI-Printer-Agent.exe" --test
+```
+
+### Gerar só o executável (sem instalador)
 
 ```powershell
 Set-Location printer-agent
@@ -157,16 +227,6 @@ npm.cmd run build:windows
 
 O arquivo será `printer-agent/dist/AtendeAI-Printer-Agent.exe`. Coloque o `config.json` ao lado dele
 (o `build-windows.ps1` copia o `config.sample.json` apenas se o `config.json` ainda não existir).
-
-## Instalador visual `.exe`
-
-1. Instale o Inno Setup: `https://jrsoftware.org/isinfo.php`.
-2. Rode `Set-ExecutionPolicy -Scope Process Bypass`.
-3. Rode `./build-installer.ps1` dentro de `printer-agent`.
-
-O arquivo final será `dist/installer/AtendeAI-Printer-Agent-Setup.exe`. O assistente pergunta a URL
-da plataforma, o modo (virtual / USB / ESC/POS por rede), o nome da impressora do Windows, o IP,
-a porta, a largura do cupom e cria o início automático no Windows.
 
 Alternativa sem instalador:
 
