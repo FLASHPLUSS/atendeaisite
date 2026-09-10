@@ -7,6 +7,7 @@ printer-agent/config.json
 # log do agente de impressao
 printer-agent/agent.log
 printer-agent/.agent.lock
+printer-agent/.ui.json
 *.log
 
 # binario base do Node preparado com o icone (gerado localmente pelo build)

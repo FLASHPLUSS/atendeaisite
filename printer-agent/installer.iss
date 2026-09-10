@@ -39,11 +39,22 @@ Source: "{#CleanupScript}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PrinterListScript}"; Flags: dontcopy
 
 [Icons]
-Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
+; No boot o agente sobe em segundo plano (imprimindo os pedidos) sem abrir janela.
+Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Parameters: "--background"; WorkingDir: "{app}"; Comment: "Imprime os pedidos do AtendeAI em segundo plano"
+; O atalho do usuario abre a tela do AtendePrint (fila, impressoras e impressao em tempo real).
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Comment: "Abrir a tela do AtendePrint"; Tasks: desktopicon
+Name: "{userprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Comment: "Abrir a tela do AtendePrint"
+Name: "{userprograms}\AtendePrint em segundo plano"; Filename: "{app}\{#AppExeName}"; Parameters: "--background"; WorkingDir: "{app}"; Comment: "Iniciar sem abrir a janela"
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na Area de Trabalho"; GroupDescription: "Atalhos adicionais:"
+Name: "abrirjanela"; Description: "Abrir a tela do AtendePrint agora"; GroupDescription: "Ao terminar a instalacao:"
+
+[Run]
+; Sobe o agente em segundo plano para ele ja comecar a imprimir.
+Filename: "{app}\{#AppExeName}"; Parameters: "--background"; Description: "Iniciar o AtendePrint em segundo plano"; Flags: nowait postinstall skipifsilent runhidden
+; E abre a tela para o operador conferir as impressoras e a fila.
+Filename: "{app}\{#AppExeName}"; Description: "Abrir a tela do AtendePrint"; Flags: nowait postinstall skipifsilent; Tasks: abrirjanela
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\output"
@@ -160,5 +171,4 @@ begin
   { Evita dois agentes disputando a mesma fila: remove a tarefa agendada antiga
     e encerra os agentes que rodavam a partir da pasta do projeto. }
   Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\{#CleanupScript}') + '"', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec(ExpandConstant('{app}\{#AppExeName}'), '', ExpandConstant('{app}'), SW_HIDE, ewNoWait, ResultCode);
 end;

@@ -3,6 +3,35 @@
 Agente local que busca os pedidos na fila da plataforma e imprime no computador do restaurante.
 Ele roda **no PC onde a impressora está ligada** (USB) ou na mesma rede dela (ESC/POS).
 
+## Tela do AtendePrint
+
+O programa abre uma janela própria com o nome **AtendePrint**, sem barra de endereços, mostrando:
+
+- **Impressoras disponíveis agora** — a lista é consultada no Windows a cada atualização, então
+  impressora ligada/desligada depois da instalação aparece corretamente. Dá para trocar a impressora
+  usada com um clique em **Usar**.
+- **Fila de espera** — os pedidos que ainda não foram impressos, do mais antigo para o mais novo,
+  com itens e valor.
+- **Impressão em tempo real** — cada pedido aparece como `IMPRIMINDO` no momento em que é enviado
+  para a impressora e depois vira `IMPRESSO` ou `FALHOU`, com o horário.
+- **Contadores do dia** — impressos hoje, na fila agora e falhas.
+
+O **endereço do painel nunca aparece na tela**: o domínio fica somente dentro do programa, e a
+janela mostra apenas "Servidor ●●●●●". A tela escuta somente em `127.0.0.1` (ninguém na rede
+consegue abrir) e exige um token que só o próprio programa conhece.
+
+### Como abrir
+
+| Ação | Resultado |
+| --- | --- |
+| Atalho **AtendePrint** (Área de Trabalho / Menu Iniciar) | Abre a tela e imprime os pedidos |
+| `AtendePrint.exe` | Igual ao atalho |
+| `AtendePrint.exe --background` | Roda só em segundo plano (é o que o Windows inicia no boot) |
+| Clicar de novo com o programa aberto | Apenas reabre a janela, não cria um segundo agente |
+
+A janela é aberta em modo aplicativo pelo Edge ou Chrome (já vêm no Windows). Se nenhum dos dois
+existir, o endereço local abre no navegador padrão.
+
 ## Modos de impressão
 
 | Modo | Para que serve | O que precisa |
@@ -139,6 +168,7 @@ Unregister-ScheduledTask -TaskName 'AtendePrint' -Confirm:$false
 | `PRINTER_PORT` | `9100` | Porta (modo `escpos`) |
 | `PRINTER_COLUMNS` | `42` | Colunas do cupom (42 = 80 mm, 32 = 58 mm) |
 | `ATENDEAI_POLL_MS` | `5000` | Intervalo de busca em milissegundos |
+| `ATENDEAI_UI_PORT` | `8787` | Porta local da tela (tentada de 8787 a 8806) |
 
 ## Como o modo USB funciona
 
@@ -199,7 +229,8 @@ Ao concluir, o instalador:
 - grava o `config.json` na mesma pasta com as respostas do assistente;
 - roda `parar-agentes-antigos.ps1`, que remove a antiga **tarefa agendada** e encerra agentes
   iniciados a partir da pasta do projeto — isso evita **dois agentes disputando a mesma fila**;
-- cria o atalho de inicialização automática e já abre o agente.
+- cria os atalhos (inicialização automática em segundo plano, Área de Trabalho e Menu Iniciar) e
+  pode abrir a tela do AtendePrint no final da instalação.
 
 ### Onde ficam as coisas depois de instalado
 
@@ -207,7 +238,8 @@ Ao concluir, o instalador:
 | --- | --- |
 | Executável e `config.json` | `%LOCALAPPDATA%\AtendeAI\AtendePrint` |
 | Cupons do modo `virtual` | `%LOCALAPPDATA%\AtendeAI\AtendePrint\output` |
-| Início automático | atalho em `shell:startup` |
+| Início automático (sem janela) | atalho em `shell:startup` com `--background` |
+| Tela do AtendePrint | atalho na Área de Trabalho e no Menu Iniciar |
 | Desinstalar | "Aplicativos instalados" do Windows → **AtendePrint** |
 
 Para diagnosticar depois de instalado, sem depender de Node.js:

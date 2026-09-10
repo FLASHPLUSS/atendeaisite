@@ -1,3 +1,6 @@
 
 # Binario base do Node preparado com o icone (gerado localmente)
 .pkg-node/
+
+# Endereco local da tela enquanto o agente roda (gerado em tempo de execucao)
+.ui.json
