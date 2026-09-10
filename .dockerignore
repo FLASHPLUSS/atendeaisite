@@ -1,5 +1,23 @@
+# Segredos e metadados do repositorio
 .env
+.env.*
 .git
 .gitignore
+.dockerignore
+Dockerfile
+
+# Dependencias (em qualquer nivel: a raiz e a do printer-agent)
 node_modules
+**/node_modules
 npm-debug.log*
+
+# Pastas locais que nao devem entrar na imagem
+atendeaisite
+.kilo
+.vscode
+
+# Logs e artefatos do agente de impressao
+**/*.log
+printer-agent/dist
+printer-agent/output
+printer-agent/config.json

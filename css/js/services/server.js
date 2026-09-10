@@ -192,10 +192,17 @@ async function handleApi(request, response, url) {
 }
 
 const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon' };
+// Arquivos internos que nunca devem ser públicos, mesmo que entrem na imagem por engano.
+const privateFiles = new Set(['.env', 'package.json', 'package-lock.json', 'Dockerfile', '.dockerignore', '.gitignore']);
 async function serveStatic(request, response, url) {
   const requestedPath = url.pathname === '/' ? '/index.html' : url.pathname;
   const filePath = path.resolve(projectRoot, `.${requestedPath}`);
   if (!filePath.startsWith(projectRoot)) return sendJson(response, 403, { message: 'Acesso negado.' });
+  // Bloqueia dotfiles (.env, .git, .dockerignore...) e os arquivos internos listados acima.
+  const relativeParts = path.relative(projectRoot, filePath).split(path.sep);
+  if (relativeParts.some((part) => part.startsWith('.') || privateFiles.has(part))) {
+    return sendJson(response, 404, { message: 'Arquivo não encontrado.' });
+  }
   try {
     const file = await fs.readFile(filePath);
     response.writeHead(200, { 'Content-Type': mimeTypes[path.extname(filePath)] || 'application/octet-stream' });
