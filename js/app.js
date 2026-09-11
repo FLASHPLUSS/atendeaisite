@@ -20,11 +20,17 @@ function setDrawer(open) {
   const drawer = document.querySelector('#drawer');
   const overlay = document.querySelector('#drawer-overlay');
   const openButton = document.querySelector('#open-drawer');
+  document.body.style.overflow = open && window.innerWidth <= 980 ? 'hidden' : '';
   if (!drawer || !overlay || !openButton) return;
   drawer.classList.toggle('is-open', open);
   overlay.classList.toggle('is-visible', open);
   openButton.setAttribute('aria-expanded', String(open));
-  document.body.style.overflow = open ? 'hidden' : '';
+}
+
+// No desktop o menu é fixo: se a janela crescer, o estado mobile precisa ser limpo
+// senão o overflow do body fica travado e a página não rola mais.
+function syncDrawerWithViewport() {
+  if (window.innerWidth > 980) setDrawer(false);
 }
 
 function bindView() {
@@ -56,6 +62,7 @@ function bindView() {
   bindReports();
   bindAgent();
   clearDemoContent();
+  hydrateDashboard().catch(() => {});
   bindOrders();
   bindCardapio();
   bindPhysicalMenu();
@@ -64,7 +71,7 @@ function bindView() {
       const page = document.querySelector('.menu-page');
       if (page) { page.dataset.bound = 'false'; bindCardapio(); }
     }
-    if (event.type.startsWith('print-job.')) refreshOrders();
+    if (event.type.startsWith('print-job.')) { refreshOrders(); hydrateDashboard().catch(() => {}); }
     // Agente mandou um relatorio novo: a tela de impressao se atualiza sozinha.
     if (event.type === 'printer.updated') window.dispatchEvent(new CustomEvent('atende:printer-updated', { detail: event.data }));
   });
@@ -85,19 +92,12 @@ function clearDemoContent() {
   document.querySelectorAll('.menu-toolbar__meta > span').forEach((element) => { element.textContent = '0 itens ativos'; });
   document.querySelectorAll('.category-tab b').forEach((element) => element.remove());
   const welcome = main?.querySelector('.welcome-row');
-  if (welcome) {
+  if (welcome && main?.id !== 'inicio') {
     welcome.querySelector('.eyebrow').textContent = 'Visão geral';
     welcome.querySelector('h1').textContent = 'Bem-vindo';
     welcome.querySelector('.subtitle').textContent = 'Os dados reais da sua operação aparecerão aqui.';
   }
-  if (main?.id === 'inicio') {
-    main.querySelector('.metric-grid').innerHTML = emptyState('Sem dados ainda', 'Os indicadores aparecerão quando houver registros no banco.');
-    main.querySelector('.sales-panel .panel__header p').textContent = 'Aguardando os primeiros registros';
-    main.querySelector('.sales-panel .chart').classList.add('chart--empty');
-    main.querySelector('.sales-panel .chart__area').insertAdjacentHTML('beforeend', '<span class="chart-empty-label">Sem dados para plotar</span>');
-    main.querySelector('.operations-panel').innerHTML = `<div class="panel__header"><div><h2>Operação hoje</h2><p>Aguardando dados da operação</p></div><span class="live-indicator"><i></i> Ao vivo</span></div>${emptyState('Sem movimentação', 'Os indicadores aparecerão assim que houver registros.')}`;
-    main.querySelector('.orders-panel--wide').innerHTML = emptyState('Nenhum pedido', 'Os pedidos reais aparecerão aqui em tempo real.');
-  }
+  // O dashboard mantém os gráficos animados e é hidratado com os dados reais do banco.
   if (main?.id === 'pedidos') {
     main.querySelector('.order-summary').innerHTML = emptyState('Nenhum pedido registrado', 'Os pedidos do banco aparecerão nesta tela.');
     main.querySelector('.orders-table-panel').innerHTML = emptyState('Aguardando pedidos', 'Não existem pedidos reais para exibir.');
@@ -119,6 +119,149 @@ function clearDemoContent() {
   const assistantPrompt = document.querySelector('#assistant-prompt');
   if (assistantName) assistantName.value = '';
   if (assistantPrompt) assistantPrompt.value = '';
+  lucide.createIcons();
+}
+
+/* ---------- Dashboard: gráficos animados com os dados reais ---------- */
+const currency = (value) => `R$ ${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const shortCurrency = (value) => {
+  const amount = Number(value || 0);
+  if (amount >= 1000) return `R$ ${(amount / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}k`;
+  return `R$ ${Math.round(amount)}`;
+};
+
+function setEmptyChart(chart, message) {
+  if (!chart) return;
+  chart.classList.add('chart--empty');
+  if (!chart.querySelector('.chart-empty-label')) chart.insertAdjacentHTML('beforeend', `<span class="chart-empty-label">${message}</span>`);
+}
+
+function buildDashboardSeries(orders) {
+  const now = new Date();
+  const days = [];
+  for (let offset = 6; offset >= 0; offset -= 1) {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
+    days.push({ key: `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`, label: day.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''), value: 0, orders: 0 });
+  }
+  const index = new Map(days.map((day) => [day.key, day]));
+  const perOrder = [];
+  (orders || []).forEach((order) => {
+    const created = new Date(order.created_at);
+    if (Number.isNaN(created.getTime())) return;
+    const key = `${created.getFullYear()}-${created.getMonth()}-${created.getDate()}`;
+    const entry = index.get(key);
+    if (!entry) return;
+    const total = Number(order.payload?.total || 0);
+    entry.value += total;
+    entry.orders += 1;
+    perOrder.push({ order, total });
+  });
+  return { days, perOrder };
+}
+
+function paintChart(svg, values) {
+  const width = 600;
+  const height = 180;
+  const padTop = 18;
+  const padBottom = 26;
+  const usable = height - padTop - padBottom;
+  const max = Math.max(...values, 1);
+  const step = values.length > 1 ? width / (values.length - 1) : width;
+  const points = values.map((value, position) => [Math.round(position * step), Math.round(height - padBottom - (value / max) * usable)]);
+  const curve = points.map(([x, y], position) => {
+    if (position === 0) return `M${x},${y}`;
+    const [prevX, prevY] = points[position - 1];
+    const midX = Math.round((prevX + x) / 2);
+    return `S${midX},${prevY} ${x},${y}`;
+  }).join(' ');
+  if (!svg) return;
+  svg.querySelector('.chart-fill')?.setAttribute('d', `${curve} L${width},${height} L0,${height}Z`);
+  svg.querySelector('.chart-line')?.setAttribute('d', curve);
+}
+
+function paintDonut(node, percent, label) {
+  if (!node) return;
+  const value = Math.max(4, Math.min(100, Math.round(percent)));
+  const color = node.classList.contains('donut--green') ? 'var(--green)' : 'var(--orange)';
+  node.style.background = `conic-gradient(${color} 0 ${value}%, rgba(255,255,255,.1) ${value}% 100%)`;
+  const span = node.querySelector('span');
+  if (span && label !== undefined) span.innerHTML = `${label}<small>%</small>`;
+}
+
+async function hydrateDashboard() {
+  const main = document.querySelector('.main-content#inicio');
+  if (!main) return;
+
+  const name = await getRestaurantSettings().then((settings) => settings?.name).catch(() => null) || getRestaurantName();
+  const welcome = main.querySelector('.welcome-row');
+  if (welcome) {
+    const now = new Date();
+    const todayLabel = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    const greeting = now.getHours() < 12 ? 'Bom dia' : now.getHours() < 18 ? 'Boa tarde' : 'Boa noite';
+    welcome.querySelector('.eyebrow').textContent = todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1);
+    welcome.querySelector('h1').textContent = `${greeting}, ${name}`;
+    welcome.querySelector('.subtitle').textContent = 'O movimento está bom. Veja os números da sua operação hoje.';
+  }
+  const datePicker = main.querySelector('.date-picker');
+  if (datePicker) datePicker.textContent = 'Últimos 7 dias';
+
+  let orders = [];
+  try {
+    ({ orders = [] } = await getOrders() || {});
+  } catch {
+    orders = [];
+  }
+
+  const { days, perOrder } = buildDashboardSeries(orders);
+  const weekTotal = days.reduce((sum, day) => sum + day.value, 0);
+  const today = days[days.length - 1];
+  const activeOrders = (orders || []).filter((order) => order.status !== 'printed' && order.status !== 'cancelled' && order.status !== 'failed');
+  const averageTicket = orders.length ? weekTotal / orders.length : 0;
+
+  const metricGrid = main.querySelector('.metric-grid');
+  if (metricGrid) {
+    metricGrid.innerHTML = `
+      <article class="metric-card metric-card--accent"><div class="metric-card__heading"><span>Receita da semana</span><i data-lucide="more-horizontal"></i></div><strong>${currency(weekTotal)}</strong><p class="trend ${weekTotal ? 'trend--up' : 'trend--down'}"><i data-lucide="${weekTotal ? 'trending-up' : 'trending-down'}"></i> ${orders.length} pedido${orders.length === 1 ? '' : 's'}</p><div class="metric-card__footer"><span class="metric-dot metric-dot--orange"></span> últimos 7 dias</div></article>
+      <article class="metric-card"><div class="metric-card__heading"><span>Pedidos hoje</span><i data-lucide="more-horizontal"></i></div><strong>${today.orders}</strong><p class="trend ${today.value ? 'trend--up' : 'trend--down'}"><i data-lucide="${today.value ? 'trending-up' : 'trending-down'}"></i> ${currency(today.value)}</p><div class="metric-card__footer"><span class="metric-dot metric-dot--green"></span> ${activeOrders.length} em andamento</div></article>
+      <article class="metric-card"><div class="metric-card__heading"><span>Ticket médio</span><i data-lucide="more-horizontal"></i></div><strong>${currency(averageTicket)}</strong><p class="trend ${averageTicket ? 'trend--up' : 'trend--down'}"><i data-lucide="trending-${averageTicket ? 'up' : 'down'}"></i> média do período</p><div class="metric-card__footer"><span class="metric-dot metric-dot--blue"></span> ${orders.length} pedido${orders.length === 1 ? '' : 's'} no total</div></article>`;
+  }
+
+  const maxValue = Math.max(...days.map((day) => day.value), 1);
+  main.querySelector('.sales-panel .panel__header p').textContent = weekTotal ? `${currency(weekTotal)} nos últimos 7 dias` : 'Aguardando os primeiros registros';
+  const labels = main.querySelectorAll('.sales-panel .chart__labels span');
+  if (weekTotal) [1, 0.75, 0.5, 0.25, 0].forEach((ratio, position) => { if (labels[position]) labels[position].textContent = shortCurrency(maxValue * ratio); });
+  const dayLabels = main.querySelectorAll('.sales-panel .chart__days span');
+  days.forEach((day, position) => { if (dayLabels[position]) dayLabels[position].textContent = day.label; });
+  if (weekTotal) paintChart(main.querySelector('.sales-panel .chart svg'), days.map((day) => day.value));
+  else setEmptyChart(main.querySelector('.sales-panel .chart'), 'Sem dados para plotar');
+
+  const ordersPanel = main.querySelector('.orders-panel--wide');
+  if (ordersPanel) {
+    ordersPanel.innerHTML = `<div class="panel__header"><div><h2>Pedidos recentes</h2><p>Acompanhe a operação sem perder o ritmo</p></div><a class="text-link" href="#pedidos">Ver todos <i data-lucide="arrow-up-right"></i></a></div>${perOrder.length ? `<div class="order-list order-list--wide">${perOrder.slice(0, 3).map(({ order, total }) => {
+      const payload = order.payload || {};
+      const status = order.status === 'printed' ? ['Pronto', 'status--ready'] : order.status === 'failed' || order.status === 'cancelled' ? ['Falhou', 'status--preparing'] : ['Preparando', 'status--paid'];
+      return `<div class="order-row"><span class="order-icon order-icon--green"><i data-lucide="shopping-bag"></i></span><span><strong>#${escapeHtml(String(order.order_number || '').replace(/^#/, ''))} · ${escapeHtml(payload.channel || 'Painel')}</strong><small>${(Array.isArray(payload.items) ? payload.items.length : 0)} itens · ${new Date(order.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</small></span><b>${currency(total)}</b><em class="status ${status[1]}">${status[0]}</em></div>`;
+    }).join('')}</div>` : emptyState('Nenhum pedido', 'Os pedidos reais aparecerão aqui em tempo real.')}`;
+  }
+
+  const operations = main.querySelector('.operations-panel');
+  if (operations) {
+    const printed = (orders || []).filter((order) => order.status === 'printed').length;
+    const pending = (orders || []).filter((order) => order.status !== 'printed' && order.status !== 'cancelled' && order.status !== 'failed').length;
+    const base = orders.length || 1;
+    const donePercent = Math.round((printed / base) * 100);
+    const pendingPercent = Math.round((pending / base) * 100);
+    const channels = {};
+    (orders || []).forEach((order) => { const channel = order.payload?.channel || 'Painel'; channels[channel] = (channels[channel] || 0) + Number(order.payload?.total || 0); });
+    const topChannel = Object.entries(channels).sort((first, second) => second[1] - first[1]).slice(0, 3);
+    const topTotal = topChannel.reduce((sum, [, value]) => sum + value, 0) || 1;
+    operations.innerHTML = `<div class="panel__header"><div><h2>Operação hoje</h2><p>O pulso do restaurante agora</p></div><span class="live-indicator"><i></i> Ao vivo</span></div>${orders.length ? `<div class="circle-grid"><div class="circle-stat"><div class="donut donut--orange"><span>${donePercent}<small>%</small></span></div><strong>Impressos</strong><small>${printed} de ${orders.length} pedidos</small></div><div class="circle-stat"><div class="donut donut--green"><span>${pendingPercent}<small>%</small></span></div><strong>Na fila</strong><small>${pending} pedido${pending === 1 ? '' : 's'} agora</small></div></div><div class="channel-row">${topChannel.map(([channel, value], position) => `<span><i class="channel-dot channel-dot--${['orange', 'green', 'blue'][position] || 'blue'}"></i> ${escapeHtml(channel)} <b>${Math.round((value / topTotal) * 100)}%</b></span>`).join('')}</div>` : emptyState('Sem movimentação', 'Os indicadores aparecerão assim que houver registros.')}`;
+    // O anel do donut no CSS é estático: aqui ele passa a refletir o percentual real.
+    paintDonut(operations.querySelector('.donut--orange'), donePercent);
+    paintDonut(operations.querySelector('.donut--green'), pendingPercent);
+  }
+
   lucide.createIcons();
 }
 
@@ -1026,5 +1169,7 @@ function render() {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') setDrawer(false);
 });
+window.addEventListener('resize', syncDrawerWithViewport);
+window.addEventListener('orientationchange', syncDrawerWithViewport);
 window.addEventListener('hashchange', render);
 render();
