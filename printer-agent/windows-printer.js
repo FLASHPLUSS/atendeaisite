@@ -19,11 +19,31 @@ if ($action -eq 'list') {
     exit 5
   }
   $printers = @()
-  try { $printers = @(Get-Printer | Select-Object -ExpandProperty Name) } catch { $printers = @() }
+  try {
+    $printers = @(Get-Printer | ForEach-Object {
+      $porta = ''
+      try { $porta = [string]$_.PortName } catch { $porta = '' }
+      $driver = ''
+      try { $driver = [string]$_.DriverName } catch { $driver = '' }
+      [pscustomobject]@{ name = [string]$_.Name; port = $porta; driver = $driver }
+    })
+  } catch { $printers = @() }
   if ($printers.Count -eq 0) {
-    try { $printers = @(Get-CimInstance -ClassName Win32_Printer | Where-Object { -not $_.Network } | Select-Object -ExpandProperty Name) } catch { $printers = @() }
+    try {
+      $printers = @(Get-CimInstance -ClassName Win32_Printer | Where-Object { -not $_.Network } | ForEach-Object {
+        [pscustomobject]@{ name = [string]$_.Name; port = [string]$_.PortName; driver = [string]$_.DriverName }
+      })
+    } catch { $printers = @() }
   }
-  foreach ($printer in $printers) { [Console]::Out.WriteLine($printer) }
+  foreach ($printer in $printers) {
+    if (-not $printer.name) { continue }
+    # USB001/USB002 ou driver com "USB" no nome = impressora ligada por cabo USB neste PC.
+    $usb = $false
+    if ($printer.port -match 'USB') { $usb = $true }
+    elseif ($printer.driver -match 'USB') { $usb = $true }
+    $item = [pscustomobject]@{ name = $printer.name; port = $printer.port; driver = $printer.driver; usb = $usb }
+    [Console]::Out.WriteLine(($item | ConvertTo-Json -Compress))
+  }
   exit 0
 }
 
@@ -169,7 +189,31 @@ function requireWindows() {
 export async function listWindowsPrinters() {
   requireWindows();
   const output = await runPowerShell({ ATENDEAI_PRINT_ACTION: 'list' });
-  return output.split(/\r?\n/).map((name) => name.trim()).filter(Boolean);
+  return output
+    .split(/\r?\n/)
+    .map((line) => {
+      const raw = line.trim();
+      if (!raw) return null;
+      // Formato novo: uma linha JSON por impressora, com porta e driver.
+      if (raw.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed?.name) {
+            return {
+              name: String(parsed.name),
+              port: String(parsed.port || ''),
+              driver: String(parsed.driver || ''),
+              usb: Boolean(parsed.usb),
+            };
+          }
+        } catch {
+          // Se vier um JSON quebrado, tratamos a linha como nome simples.
+        }
+      }
+      // Formato antigo (apenas o nome), mantido para nao quebrar nada.
+      return { name: raw, port: '', driver: '', usb: /usb/i.test(raw) };
+    })
+    .filter(Boolean);
 }
 
 export async function printWindowsRaw(receipt, { printerName } = {}) {

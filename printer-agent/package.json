@@ -1,6 +1,6 @@
 {
   "name": "atendeprint",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "description": "Agente de impressao AtendePrint: imprime os pedidos do painel na impressora termica do restaurante.",
   "type": "module",

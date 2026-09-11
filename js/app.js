@@ -65,6 +65,8 @@ function bindView() {
       if (page) { page.dataset.bound = 'false'; bindCardapio(); }
     }
     if (event.type.startsWith('print-job.')) refreshOrders();
+    // Agente mandou um relatorio novo: a tela de impressao se atualiza sozinha.
+    if (event.type === 'printer.updated') window.dispatchEvent(new CustomEvent('atende:printer-updated', { detail: event.data }));
   });
 }
 
@@ -733,45 +735,234 @@ function bindSettings() {
     const hostInput = printerSection.querySelector('#printer-host');
     const portInput = printerSection.querySelector('#printer-port');
     const columnsInput = printerSection.querySelector('#printer-columns');
+    const maxLinesInput = printerSection.querySelector('#printer-max-lines');
     const pollInput = printerSection.querySelector('#printer-poll');
+    const layoutInput = printerSection.querySelector('#printer-layout');
+    const previewBox = printerSection.querySelector('#printer-layout-preview');
+    const tokensBox = printerSection.querySelector('#printer-tokens');
+    const detectedList = printerSection.querySelector('#printer-detected-list');
+    const detectedHint = printerSection.querySelector('#printer-detected-hint');
+    const statusBox = printerSection.querySelector('#printer-agent-status');
+    const statusText = printerSection.querySelector('#printer-agent-status-text');
+    const refreshButton = printerSection.querySelector('#printer-refresh-button');
     const saveButton = printerSection.querySelector('#printer-save-button');
     const testButton = printerSection.querySelector('#printer-test-button');
     const feedback = printerSection.querySelector('#printer-save-feedback');
-    const statusText = printerSection.querySelector('#printer-agent-status-text');
     const stored = JSON.parse(localStorage.getItem('atende-printer-config') || '{}');
+
+    // Marcadores que o agente substitui na hora de imprimir.
+    const tokens = [
+      ['loja', 'Nome do restaurante'],
+      ['pedido', 'Número do pedido'],
+      ['data', 'Data e hora'],
+      ['hora', 'Somente a hora'],
+      ['itens', 'Lista de itens'],
+      ['total', 'Valor total'],
+      ['cliente', 'Nome do cliente'],
+      ['telefone', 'Telefone do cliente'],
+      ['endereco', 'Endereço de entrega'],
+      ['observacoes', 'Observações do pedido'],
+      ['linha', 'Linha separadora'],
+    ];
+    const defaultLayout = ['{{loja}}', 'PEDIDO {{pedido}}', '{{data}}', '{{linha}}', '{{itens}}', '{{linha}}', 'TOTAL: R$ {{total}}', '{{cliente}}', '{{observacoes}}', '{{linha}}', 'Obrigado pela preferencia!'].join('\n');
+
+    // Um pedido de exemplo alimenta a pré-visualização, igual ao que o agente faz na impressora.
+    const sampleJob = () => ({
+      order_number: '1042',
+      created_at: new Date().toISOString(),
+      payload: {
+        restaurant: { name: 'Manjericão' },
+        items: [{ quantity: 2, name: 'X-Burger', price: 25 }, { quantity: 1, name: 'Suco de laranja', price: 8, notes: 'Sem gelo' }],
+        total: 58,
+        customer: 'Maria Souza',
+        notes: 'Entregar na portaria',
+      },
+    });
+
+    const tokenLabel = (value, columns) => String(value ?? '').slice(0, columns);
+    const tokenPad = (left, right, columns) => {
+      const l = tokenLabel(left, columns);
+      const r = tokenLabel(right, columns);
+      const space = columns - l.length - r.length;
+      if (space <= 0) return tokenLabel(`${l} ${r}`, columns);
+      return `${l}${' '.repeat(space)}${r}`;
+    };
+
+    // Mesma lógica do formatter.js do agente, só para mostrar o cupom na tela.
+    const previewLayout = (layout, columns, maxLines) => {
+      const job = sampleJob();
+      const order = job.payload;
+      const values = {
+        loja: order.restaurant.name,
+        pedido: job.order_number,
+        data: new Date(job.created_at).toLocaleString('pt-BR'),
+        hora: new Date(job.created_at).toLocaleTimeString('pt-BR'),
+        itens: order.items
+          .map((item) => [tokenPad(`${item.quantity}x ${item.name}`, `R$ ${(item.quantity * item.price).toFixed(2).replace('.', ',')}`, columns), item.notes ? `   Obs: ${tokenLabel(item.notes, columns - 8)}` : ''].filter(Boolean).join('\n'))
+          .join('\n'),
+        total: Number(order.total).toFixed(2).replace('.', ','),
+        cliente: `Cliente: ${order.customer}`,
+        telefone: '',
+        endereco: '',
+        observacoes: `Obs: ${order.notes}`,
+        linha: '-'.repeat(columns),
+      };
+      const lines = layout
+        .split('\n')
+        .map((raw) => {
+          const only = raw.trim().match(/^\{\{([a-z]+)\}\}$/i);
+          if (only && !String(values[only[1].toLowerCase()] ?? '').trim()) return null;
+          return raw.replace(/\{\{([a-z]+)\}\}/gi, (match, key) => (values[key.toLowerCase()] === undefined ? match : values[key.toLowerCase()]));
+        })
+        .filter((value) => value !== null)
+        .flatMap((value) => String(value).split('\n'))
+        .map((value) => tokenLabel(value, columns));
+      const total = Number(maxLines || 0);
+      if (!total || total <= 0) return lines.join('\n');
+      if (lines.length > total) {
+        const kept = lines.slice(0, total);
+        kept[total - 1] = lines[lines.length - 1];
+        return kept.join('\n');
+      }
+      return lines.concat(Array.from({ length: total - lines.length }, () => '')).join('\n');
+    };
+
+    const renderPreview = () => {
+      const columns = Math.min(Math.max(Number(columnsInput.value) || 42, 20), 80);
+      const maxLines = Math.min(Math.max(Number(maxLinesInput.value) || 0, 0), 200);
+      previewBox.textContent = previewLayout(layoutInput.value || defaultLayout, columns, maxLines) || '(cupom vazio)';
+    };
+
     const applyPrinter = (printer = {}) => {
       if (printer.mode) modeInput.value = printer.mode;
       if (printer.printerName) nameInput.value = printer.printerName;
       if (printer.host) hostInput.value = printer.host;
       if (printer.port) portInput.value = printer.port;
       if (printer.columns) columnsInput.value = String(printer.columns);
+      if (printer.maxLines !== undefined && printer.maxLines !== null) maxLinesInput.value = String(printer.maxLines);
+      if (printer.layout) layoutInput.value = printer.layout;
       if (printer.pollSeconds) pollInput.value = printer.pollSeconds;
     };
+
+    // Lista as impressoras que o agente encontrou ligadas neste computador.
+    const renderDetected = (list = [], agent = null) => {
+      if (!list.length) {
+        detectedList.innerHTML = '<p class="printer-detected__empty">Nenhuma impressora recebida ainda. Ligue a impressora na USB e abra o AtendePrint neste computador.</p>';
+        return;
+      }
+      detectedList.innerHTML = list
+        .map((printer) => {
+          const active = (agent?.printerName || nameInput.value) === printer.name;
+          const details = [printer.usb ? 'USB' : 'Outra conexão', printer.port ? `porta ${printer.port}` : '', printer.driver || ''].filter(Boolean).join(' · ');
+          return `<button class="printer-detected__item${active ? ' is-active' : ''}" type="button" data-printer-name="${escapeHtml(printer.name)}"><i data-lucide="printer"></i><span><strong>${escapeHtml(printer.name)}</strong><small>${escapeHtml(details)}</small></span>${active ? '<b>Em uso</b>' : ''}</button>`;
+        })
+        .join('');
+      detectedList.querySelectorAll('[data-printer-name]').forEach((button) => button.addEventListener('click', () => {
+        nameInput.value = button.dataset.printerName;
+        modeInput.value = 'usb';
+        if (printerSection.querySelector('.printer-advanced')) printerSection.querySelector('.printer-advanced').open = true;
+        detectedHint.textContent = `"${button.dataset.printerName}" selecionada. Clique em Salvar configuração para confirmar.`;
+        renderDetected(list, { printerName: button.dataset.printerName });
+      }));
+      if (window.lucide) window.lucide.createIcons();
+    };
+
+    const renderStatus = (agent) => {
+      const minutes = agent?.reportedAt ? Math.round((Date.now() - new Date(agent.reportedAt).getTime()) / 60000) : null;
+      if (!agent) {
+        statusBox.dataset.state = 'offline';
+        statusText.textContent = 'Nenhum agente conectado ainda. Instale o AtendePrint neste computador.';
+        return;
+      }
+      const quando = minutes === null ? '' : minutes <= 0 ? 'agora mesmo' : `há ${minutes} min`;
+      statusBox.dataset.state = agent.connected ? 'online' : 'offline';
+      statusBox.className = `printer-agent-status${agent.connected ? '' : ' is-offline'}`;
+      statusText.textContent = agent.connected
+        ? `Agente online em "${agent.machineName}"${quando ? ` (visto ${quando})` : ''}${agent.printerName ? ` · imprimindo em "${agent.printerName}"` : ''}`
+        : `Agente em "${agent.machineName}" está com problema: ${agent.lastError || 'sem conexão com o painel'}`;
+    };
+
+    // Carrega a configuração salva + o último relatório do agente.
+    const loadPrinterConfig = async () => {
+      statusBox.dataset.state = 'loading';
+      statusText.textContent = 'Procurando o agente instalado neste computador...';
+      try {
+        const remote = await getPrinterConfig();
+        if (!Object.keys(stored).length) applyPrinter(remote);
+        else if (remote.layout && !stored.layout) layoutInput.value = remote.layout;
+        renderStatus(remote.agent);
+        renderDetected(remote.detectedPrinters || [], remote.agent);
+        if (remote.agent?.printerName && !nameInput.value) nameInput.value = remote.agent.printerName;
+        renderPreview();
+      } catch (error) {
+        statusBox.dataset.state = 'offline';
+        statusText.textContent = `Não foi possível ler a configuração do servidor: ${error.message}`;
+      }
+    };
+
+    tokensBox.insertAdjacentHTML('beforeend', tokens.map(([token, label]) => `<button class="printer-token" type="button" data-token="{{${token}}}" title="${escapeHtml(label)}">{{${token}}}</button>`).join(''));
+    tokensBox.querySelectorAll('[data-token]').forEach((button) => button.addEventListener('click', () => {
+      const token = button.dataset.token;
+      const start = layoutInput.selectionStart ?? layoutInput.value.length;
+      // Insere no ponto do cursor e devolve o foco para o editor.
+      layoutInput.value = `${layoutInput.value.slice(0, start)}${token}${layoutInput.value.slice(layoutInput.selectionEnd ?? start)}`;
+      layoutInput.focus();
+      layoutInput.selectionStart = layoutInput.selectionEnd = start + token.length;
+      renderPreview();
+    }));
+
+    layoutInput.value = stored.layout || defaultLayout;
+    [columnsInput, maxLinesInput].forEach((input) => input.addEventListener('input', renderPreview));
+    layoutInput.addEventListener('input', renderPreview);
     applyPrinter(stored);
+    renderPreview();
+
     const updateModeState = () => {
       const mode = modeInput.value;
       printerSection.querySelector('.printer-settings-name').hidden = mode !== 'usb';
       printerSection.querySelector('.printer-settings-host').hidden = mode !== 'escpos';
-      if (statusText) statusText.textContent = mode === 'usb' ? 'A impressora USB precisa estar instalada neste computador.' : mode === 'escpos' ? 'A impressora de rede precisa estar acessível pelo IP informado.' : 'Modo de teste: os cupons são salvos em arquivos .txt.';
     };
     modeInput.addEventListener('change', updateModeState);
     updateModeState();
-    if (!Object.keys(stored).length) getPrinterConfig().then((remote) => { applyPrinter(remote); updateModeState(); }).catch(() => {});
-    saveButton.addEventListener('click', () => {
-      const printer = { mode: modeInput.value, printerName: nameInput.value.trim(), host: hostInput.value.trim(), port: Number(portInput.value), columns: Number(columnsInput.value), pollSeconds: Number(pollInput.value) };
-      localStorage.setItem('atende-printer-config', JSON.stringify(printer));
-      updateRestaurantSettings({ printer }).then(() => { feedback.textContent = 'Configuração salva no servidor.'; }).catch((error) => { feedback.textContent = `Salvo localmente. Servidor: ${error.message}`; });
+
+    refreshButton.addEventListener('click', async () => {
+      refreshButton.disabled = true;
+      feedback.textContent = 'Perguntando ao agente...';
+      await loadPrinterConfig();
+      feedback.textContent = 'Lista atualizada.';
+      refreshButton.disabled = false;
     });
+
+    saveButton.addEventListener('click', () => {
+      const printer = {
+        mode: modeInput.value,
+        printerName: nameInput.value.trim(),
+        host: hostInput.value.trim(),
+        port: Number(portInput.value),
+        columns: Math.min(Math.max(Number(columnsInput.value) || 42, 20), 80),
+        maxLines: Math.min(Math.max(Number(maxLinesInput.value) || 0, 0), 200),
+        layout: layoutInput.value,
+        pollSeconds: Number(pollInput.value),
+      };
+      localStorage.setItem('atende-printer-config', JSON.stringify(printer));
+      // O agente busca esta configuração a cada ciclo, então ela vale para o próximo papel.
+      updateRestaurantSettings({ printer }).then(() => { feedback.textContent = 'Configuração salva. O agente já vai usar no próximo pedido.'; }).catch((error) => { feedback.textContent = `Salvo localmente. Servidor: ${error.message}`; });
+    });
+
     testButton.addEventListener('click', async () => {
       testButton.disabled = true;
       feedback.textContent = 'Criando pedido de teste na fila...';
       try {
-        await createPrintJob({ orderNumber: `TESTE-${Date.now()}`, order: { items: [{ quantity: 1, name: 'X-Burger de teste', price: 25 }], total: 25, notes: 'Gerado pelo painel' } });
-        feedback.textContent = 'Pedido de teste criado. O agente irá imprimir no próximo ciclo.';
+        await createPrintJob({ orderNumber: `TESTE-${Date.now()}`, order: { items: [{ quantity: 2, name: 'X-Burger', price: 25, notes: 'Sem cebola' }], total: 50, customer: 'Cliente de teste', notes: 'Cupom de teste gerado pelo painel' } });
+        feedback.textContent = 'Pedido de teste criado. O agente imprime no próximo ciclo.';
       } catch (error) {
         feedback.textContent = error.message;
       } finally { testButton.disabled = false; }
     });
+
+    loadPrinterConfig();
+    // Quando o agente avisa em tempo real, a tela recarrega sem recarregar a pagina.
+    window.addEventListener('atende:printer-updated', loadPrinterConfig);
   }
 
   themeOptions.forEach((option) => option.addEventListener('click', () => {

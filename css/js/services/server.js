@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRealtimeServer } from './websocket.js';
-import { createMenuItem, createPrintJob, deleteMenuItem, deletePrintJob, getPhysicalMenu, getPrinterSettings, getRestaurant, listMenu, listOrders, listPendingPrintJobs, migrate, pool, savePhysicalMenu, updateMenuItem, updatePrintJob, updateSettings } from './db.js';
+import { createMenuItem, createPrintJob, deleteMenuItem, deletePrintJob, getPhysicalMenu, getPrinterSettings, getRestaurant, listAgents, listMenu, listOrders, listPendingPrintJobs, migrate, pool, saveAgentReport, savePhysicalMenu, updateMenuItem, updatePrintJob, updateSettings } from './db.js';
 
 const currentFile = fileURLToPath(import.meta.url);
 const servicesDirectory = path.dirname(currentFile);
@@ -102,6 +102,18 @@ async function handleApi(request, response, url) {
     requireDatabase();
     return sendJson(response, 200, await getPrinterSettings());
   }
+  // O agente instalado no computador do restaurante avisa daqui em diante:
+  // quais impressoras USB existem na maquina e o estado atual da impressao.
+  if (url.pathname === '/api/printer-agent/report' && request.method === 'POST') {
+    requireDatabase();
+    const agent = await saveAgentReport(await readJson(request));
+    realtime.broadcast('printer.updated', agent);
+    return sendJson(response, 200, { ok: true, agent });
+  }
+  if (url.pathname === '/api/printer-agent' && request.method === 'GET') {
+    requireDatabase();
+    return sendJson(response, 200, { agents: await listAgents() });
+  }
   if (url.pathname === '/api/print-jobs' && request.method === 'POST') {
     requireDatabase();
     const job = await createPrintJob(await readJson(request));
@@ -193,14 +205,16 @@ async function handleApi(request, response, url) {
 
 const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon' };
 // Arquivos internos que nunca devem ser públicos, mesmo que entrem na imagem por engano.
-const privateFiles = new Set(['.env', 'package.json', 'package-lock.json', 'Dockerfile', '.dockerignore', '.gitignore']);
+const privateFiles = new Set(['.env', 'package.json', 'package-lock.json', 'Dockerfile', '.dockerignore', '.gitignore', 'agent.js', 'formatter.js', 'escpos.js', 'windows-printer.js']);
+// A pasta do agente tem codigo que so roda no computador do restaurante.
+const privateFolders = new Set(['printer-agent', 'scripts']);
 async function serveStatic(request, response, url) {
   const requestedPath = url.pathname === '/' ? '/index.html' : url.pathname;
   const filePath = path.resolve(projectRoot, `.${requestedPath}`);
   if (!filePath.startsWith(projectRoot)) return sendJson(response, 403, { message: 'Acesso negado.' });
   // Bloqueia dotfiles (.env, .git, .dockerignore...) e os arquivos internos listados acima.
   const relativeParts = path.relative(projectRoot, filePath).split(path.sep);
-  if (relativeParts.some((part) => part.startsWith('.') || privateFiles.has(part))) {
+  if (relativeParts.some((part) => part.startsWith('.') || privateFiles.has(part) || privateFolders.has(part))) {
     return sendJson(response, 404, { message: 'Arquivo não encontrado.' });
   }
   try {

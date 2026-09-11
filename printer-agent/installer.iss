@@ -4,7 +4,7 @@
 ; (ou rode build-installer.ps1, que cuida disso).
 
 #define AppName "AtendePrint"
-#define AppVersion "2.0.0"
+#define AppVersion "3.0.0"
 #define AppPublisher "AtendeAI"
 #define AppExeName "AtendePrint.exe"
 #define AppIcon "assets\AtendePrint.ico"
@@ -39,27 +39,25 @@ Source: "{#CleanupScript}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PrinterListScript}"; Flags: dontcopy
 
 [Icons]
-; No boot o agente sobe em segundo plano (imprimindo os pedidos) sem abrir janela.
-Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Parameters: "--background"; WorkingDir: "{app}"; Comment: "Imprime os pedidos do AtendeAI em segundo plano"
-; O atalho do usuario abre a tela do AtendePrint (fila, impressoras e impressao em tempo real).
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Comment: "Abrir a tela do AtendePrint"; Tasks: desktopicon
-Name: "{userprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Comment: "Abrir a tela do AtendePrint"
-Name: "{userprograms}\AtendePrint em segundo plano"; Filename: "{app}\{#AppExeName}"; Parameters: "--background"; WorkingDir: "{app}"; Comment: "Iniciar sem abrir a janela"
+; No boot o agente sobe escondido (sem janela) e ja comeca a imprimir os pedidos.
+Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Comment: "Imprime os pedidos do AtendeAI em segundo plano"
+; Atalho opcional para reiniciar o agente a mao, sem janela nenhuma.
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Comment: "Reiniciar o AtendePrint em segundo plano"; Tasks: desktopicon
+Name: "{userprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Comment: "Reiniciar o AtendePrint em segundo plano"
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na Area de Trabalho"; GroupDescription: "Atalhos adicionais:"
-Name: "abrirjanela"; Description: "Abrir a tela do AtendePrint agora"; GroupDescription: "Ao terminar a instalacao:"
 
 [Run]
 ; Sobe o agente em segundo plano para ele ja comecar a imprimir.
-Filename: "{app}\{#AppExeName}"; Parameters: "--background"; Description: "Iniciar o AtendePrint em segundo plano"; Flags: nowait postinstall skipifsilent runhidden
-; E abre a tela para o operador conferir as impressoras e a fila.
-Filename: "{app}\{#AppExeName}"; Description: "Abrir a tela do AtendePrint"; Flags: nowait postinstall skipifsilent; Tasks: abrirjanela
+Filename: "{app}\{#AppExeName}"; Description: "Iniciar o AtendePrint em segundo plano"; Flags: nowait postinstall skipifsilent runhidden
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\output"
 Type: files; Name: "{app}\config.json"
 Type: files; Name: "{app}\.agent.lock"
+Type: files; Name: "{app}\agent.log"
+Type: files; Name: "{app}\agent.log.old"
 
 [UninstallRun]
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#AppExeName}"; Flags: runhidden; RunOnceId: "EncerrarAgente"
@@ -111,14 +109,16 @@ begin
   if ImpressorasEncontradas = 0 then PrinterListPage.Add('(nenhuma impressora detectada)');
   PrinterListPage.SelectedValueIndex := 0;
 
-  PrinterPage := CreateInputQueryPage(PrinterListPage.ID, 'Rede e formato', 'Ajustes de impressao', 'Preencha o IP apenas no modo ESC/POS por rede.');
+  PrinterPage := CreateInputQueryPage(PrinterListPage.ID, 'Rede e formato', 'Ajustes de impressao', 'Preencha o IP apenas no modo ESC/POS por rede. Largura e altura tambem podem ser ajustadas depois na tela Impressao do painel.');
   PrinterPage.Add('IP ou hostname (modo ESC/POS por rede):', False);
   PrinterPage.Add('Porta:', False);
   PrinterPage.Add('Largura do cupom em colunas (42 = 80mm, 32 = 58mm):', False);
+  PrinterPage.Add('Altura do cupom em linhas (0 = do tamanho do pedido):', False);
   PrinterPage.Add('Intervalo de busca (segundos):', False);
   PrinterPage.Values[1] := '9100';
   PrinterPage.Values[2] := '42';
-  PrinterPage.Values[3] := '5';
+  PrinterPage.Values[3] := '0';
+  PrinterPage.Values[4] := '5';
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -164,7 +164,8 @@ begin
     '  "mode": "' + Mode + '",' + #13#10 +
     '  "printerName": "' + JsonEscape(NomeImpressoraEscolhida) + '",' + #13#10 +
     '  "columns": ' + PrinterPage.Values[2] + ',' + #13#10 +
-    '  "pollSeconds": ' + PrinterPage.Values[3] + ',' + #13#10 +
+    '  "maxLines": ' + PrinterPage.Values[3] + ',' + #13#10 +
+    '  "pollSeconds": ' + PrinterPage.Values[4] + ',' + #13#10 +
     '  "printerHost": "' + JsonEscape(PrinterPage.Values[0]) + '",' + #13#10 +
     '  "printerPort": ' + PrinterPage.Values[1] + #13#10 +
     '}' + #13#10, False);

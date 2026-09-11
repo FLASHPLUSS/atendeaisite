@@ -3,34 +3,42 @@
 Agente local que busca os pedidos na fila da plataforma e imprime no computador do restaurante.
 Ele roda **no PC onde a impressora está ligada** (USB) ou na mesma rede dela (ESC/POS).
 
-## Tela do AtendePrint
+## O agente não tem tela: quem mostra tudo é o painel
 
-O programa abre uma janela própria com o nome **AtendePrint**, sem barra de endereços, mostrando:
+O AtendePrint roda **totalmente oculto**, como serviço em segundo plano no Windows. Não abre janela,
+não fica na barra de tarefas e não oferece nenhuma configuração local. Toda a operação acontece na
+**tela Impressão do painel web**.
 
-- **Impressoras disponíveis agora** — a lista é consultada no Windows a cada atualização, então
-  impressora ligada/desligada depois da instalação aparece corretamente. Dá para trocar a impressora
-  usada com um clique em **Usar**.
-- **Fila de espera** — os pedidos que ainda não foram impressos, do mais antigo para o mais novo,
-  com itens e valor.
-- **Impressão em tempo real** — cada pedido aparece como `IMPRIMINDO` no momento em que é enviado
-  para a impressora e depois vira `IMPRESSO` ou `FALHOU`, com o horário.
-- **Contadores do dia** — impressos hoje, na fila agora e falhas.
+O que o agente faz sozinho, em ciclo:
 
-O **endereço do painel nunca aparece na tela**: o domínio fica somente dentro do programa, e a
-janela mostra apenas "Servidor ●●●●●". A tela escuta somente em `127.0.0.1` (ninguém na rede
-consegue abrir) e exige um token que só o próprio programa conhece.
+1. **Descobre as impressoras** instaladas neste Windows (USB e rede), incluindo porta e driver.
+2. **Informa o painel** o que encontrou, a cada poucos segundos (`POST /api/printer-agent/report`).
+3. **Escolhe sozinho** a impressora USB quando o painel ainda não decidiu — a preferência é sempre
+   pela que está em porta USB.
+4. **Busca a fila** (`GET /api/print-jobs`), imprime e devolve `printed` ou `failed`.
+5. **Rebusca a configuração** do painel a cada ciclo: largura, altura, layout do cupom, impressora e
+   intervalo de busca mudam no painel e já valem no próximo papel.
 
-### Como abrir
+Na tela **Impressão** do painel o usuário encontra:
+
+- a **impressora real** detectada pelo agente na USB, com o estado do agente (online/offline e há
+  quanto tempo reportou);
+- os campos de **Largura (colunas)** e **Comprimento/altura (linhas)** do cupom;
+- o **editor do comprovante**, com marcadores (`{{loja}}`, `{{itens}}`, `{{total}}`...) e
+  pré-visualização na largura configurada;
+- o botão **Criar pedido de teste**, que valida a comunicação em tempo real.
+
+O **endereço do painel nunca aparece para o usuário final**: o domínio fica somente no `config.json`
+do computador e o agente não expõe nenhuma página local.
+
+### Como iniciar
 
 | Ação | Resultado |
 | --- | --- |
-| Atalho **AtendePrint** (Área de Trabalho / Menu Iniciar) | Abre a tela e imprime os pedidos |
-| `AtendePrint.exe` | Igual ao atalho |
-| `AtendePrint.exe --background` | Roda só em segundo plano (é o que o Windows inicia no boot) |
-| Clicar de novo com o programa aberto | Apenas reabre a janela, não cria um segundo agente |
-
-A janela é aberta em modo aplicativo pelo Edge ou Chrome (já vêm no Windows). Se nenhum dos dois
-existir, o endereço local abre no navegador padrão.
+| Ligar o Windows | O agente sobe sozinho, em segundo plano, e já imprime os pedidos |
+| Atalho **AtendePrint** (Área de Trabalho / Menu Iniciar) | Apenas reinicia o agente em segundo plano |
+| `AtendePrint.exe` | Igual ao atalho (nunca abre janela) |
+| Clicar de novo com o agente ligado | O segundo processo encerra sozinho, sem imprimir em duplicidade |
 
 ## Modos de impressão
 
@@ -80,14 +88,19 @@ existir, o endereço local abre no navegador padrão.
    {
      "apiUrl": "https://www.anota.ai.venusdev.xyz",
      "mode": "usb",
-     "printerName": "NOME EXATO DA IMPRESSORA",
+     "printerName": "",
      "columns": 42,
+     "maxLines": 0,
      "pollSeconds": 5
    }
    ```
 
-   - `columns`: `42` para papel de 80 mm e `32` para 58 mm.
-   - O nome precisa ser idêntico ao que aparece em Impressoras e scanners (maiúsculas, espaços e acentos contam).
+   - `columns`: largura do cupom em colunas — `42` para papel de 80 mm e `32` para 58 mm.
+   - `maxLines`: altura do cupom em linhas. Use `0` (padrão) para o cupom ficar do tamanho do pedido.
+   - `printerName`: pode ficar **vazio**. O agente detecta a impressora USB do PC sozinho e mostra na
+     tela Impressão do painel, onde o usuário confirma ou troca. Se preencher, o nome precisa ser
+     idêntico ao que aparece em Impressoras e scanners (maiúsculas, espaços e acentos contam).
+   - Todas essas opções também podem ser ajustadas depois pelo painel, sem reinstalar.
 
 4. Teste a impressão direto no PC, sem depender da plataforma:
 
@@ -124,6 +137,17 @@ O agente consulta `/api/print-jobs` a cada 5 segundos, imprime e atualiza o stat
 A configuração salva no painel (`/api/printer-config`) só preenche o que **não** estiver definido no
 `config.json` ou em variáveis de ambiente — o hardware é sempre decidido no PC.
 
+Além disso, o agente envia o **relatório de impressoras** para `/api/printer-agent/report`, no máximo
+a cada 10 segundos, com: nome da máquina, versão, plataforma, modo, impressora em uso, largura,
+altura, o estado da conexão, a lista de impressoras do Windows (`name`, `port`, `driver`, `usb`) e as
+últimas atividades de impressão. É esse relatório que alimenta a tela Impressão do painel.
+
+| Rota | Método | Para que serve |
+| --- | --- | --- |
+| `/api/printer-agent/report` | POST | O agente informa impressoras e estado (chamado pelo agente) |
+| `/api/printer-agent` | GET | O painel lista os agentes conhecidos |
+| `/api/printer-config` | GET | O agente busca modo, largura, altura e layout definidos no painel |
+
 > Se aparecer `A VPS está com uma versão antiga e ainda não possui as rotas de impressão`, o servidor
 > publicado ainda não tem o `server.js` atualizado. Publique a versão atual para que o modo/impressora
 > salvos no painel cheguem ao agente. Nada quebra: o agente continua usando o `config.json` local.
@@ -135,26 +159,36 @@ A configuração salva no painel (`/api/printer-config`) só preenche o que **n�
 
 | Script | Para que serve |
 | --- | --- |
-| `instalar-inicio-automatico.ps1` | Cria a tarefa agendada **AtendePrint**, que sobe o agente a cada logon do Windows. Não precisa de administrador. |
-| `iniciar-agente.ps1` | Roda o agente em primeiro plano gravando tudo em `printer-agent/agent.log` (UTF-8). |
+| `instalar-inicio-automatico.ps1` | Alternativa ao instalador para uso em desenvolvimento: registra a tarefa agendada **AtendePrint**, que sobe o agente a cada logon. Não precisa de administrador. |
+| `iniciar-agente.ps1` | Roda o agente em primeiro plano gravando tudo em `printer-agent/agent.log` (UTF-8). Útil para ver o que está acontecendo. |
 | `enviar-teste.ps1` | Cria um pedido de teste na plataforma para conferir a impressão de ponta a ponta. |
 | `list-printers.ps1` | Lista os nomes exatos das impressoras do Windows (não precisa de Node.js). |
 | `listar-impressoras.ps1` | Igual ao anterior, mas grava o resultado em um arquivo (`-OutFile`). É o que o instalador usa para montar a lista de impressoras. |
 | `parar-agentes-antigos.ps1` | Remove a tarefa agendada antiga e encerra agentes que rodavam pela pasta do projeto, evitando dois agentes na mesma fila. |
 | `printer-info.ps1` | Diagnóstico: serviço de spooler, impressoras, portas e fila de impressão. |
+| `build-windows.ps1` | Gera `dist\AtendePrint.exe` com ícone e versão aplicados. |
+| `build-installer.ps1` | Gera o instalador final `dist\installer\AtendePrint-Setup-v3.0.0.exe`. |
 
-Uso típico:
+Uso típico em desenvolvimento:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File printer-agent/instalar-inicio-automatico.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File printer-agent/enviar-teste.ps1
 ```
 
-Para parar/remover o início automático:
+Para parar/remover o início automático de desenvolvimento:
 
 ```powershell
 Stop-ScheduledTask -TaskName 'AtendePrint'
 Unregister-ScheduledTask -TaskName 'AtendePrint' -Confirm:$false
+```
+
+Depois de instalado pelo instalador, o início automático é um atalho em
+`shell:startup` (não uma tarefa agendada). Para conferir:
+
+```powershell
+Get-ChildItem ([Environment]::GetFolderPath('Startup')) | Where-Object Name -like 'AtendePrint*'
+Get-Process AtendePrint -ErrorAction SilentlyContinue
 ```
 
 ## Variáveis de ambiente
@@ -166,9 +200,10 @@ Unregister-ScheduledTask -TaskName 'AtendePrint' -Confirm:$false
 | `PRINTER_NAME` | vazio | Nome da impressora do Windows (modo `usb`) |
 | `PRINTER_HOST` | vazio | IP/hostname (modo `escpos`) |
 | `PRINTER_PORT` | `9100` | Porta (modo `escpos`) |
-| `PRINTER_COLUMNS` | `42` | Colunas do cupom (42 = 80 mm, 32 = 58 mm) |
+| `PRINTER_COLUMNS` | `42` | Largura do cupom em colunas (42 = 80 mm, 32 = 58 mm) |
+| `PRINTER_MAX_LINES` | `0` | Altura do cupom em linhas (0 = do tamanho do pedido) |
 | `ATENDEAI_POLL_MS` | `5000` | Intervalo de busca em milissegundos |
-| `ATENDEAI_UI_PORT` | `8787` | Porta local da tela (tentada de 8787 a 8806) |
+| `ATENDEAI_MACHINE` | nome do PC | Nome que o painel usa para identificar este computador |
 
 ## Como o modo USB funciona
 
@@ -208,7 +243,7 @@ O script instala as dependências, compila o agente com o `pkg` (se ainda não e
 Inno Setup. O arquivo final fica em:
 
 ```
-printer-agent/dist/installer/AtendePrint-Setup-v2.0.0.exe
+printer-agent/dist/installer/AtendePrint-Setup-v3.0.0.exe
 ```
 
 ### O que o assistente faz
@@ -218,8 +253,9 @@ printer-agent/dist/installer/AtendePrint-Setup-v2.0.0.exe
 3. **Impressora** – lê as impressoras instaladas neste PC e mostra uma **lista para escolher**,
    em vez de obrigar o usuário a digitar o nome exato (era aí que a impressão quebrava antes).
    Esta tela só aparece no modo USB.
-4. **Rede e formato** – IP/hostname (só no modo rede), porta, largura do cupom (`42` = 80 mm,
-   `32` = 58 mm) e o intervalo de busca em segundos.
+4. **Rede e formato** – IP/hostname (só no modo rede), porta, **largura do cupom** (`42` = 80 mm,
+   `32` = 58 mm), **altura do cupom em linhas** (`0` = do tamanho do pedido) e o intervalo de busca.
+   Tudo isso também pode ser ajustado depois no painel, na tela Impressão.
 
 Ao concluir, o instalador:
 
@@ -230,7 +266,7 @@ Ao concluir, o instalador:
 - roda `parar-agentes-antigos.ps1`, que remove a antiga **tarefa agendada** e encerra agentes
   iniciados a partir da pasta do projeto — isso evita **dois agentes disputando a mesma fila**;
 - cria os atalhos (inicialização automática em segundo plano, Área de Trabalho e Menu Iniciar) e
-  pode abrir a tela do AtendePrint no final da instalação.
+  já sobe o agente escondido, para começar a imprimir.
 
 ### Onde ficam as coisas depois de instalado
 
@@ -238,8 +274,8 @@ Ao concluir, o instalador:
 | --- | --- |
 | Executável e `config.json` | `%LOCALAPPDATA%\AtendeAI\AtendePrint` |
 | Cupons do modo `virtual` | `%LOCALAPPDATA%\AtendeAI\AtendePrint\output` |
-| Início automático (sem janela) | atalho em `shell:startup` com `--background` |
-| Tela do AtendePrint | atalho na Área de Trabalho e no Menu Iniciar |
+| Início automático (oculto) | atalho em `shell:startup` |
+| Atalhos manuais | Área de Trabalho e Menu Iniciar (reiniciam o agente em segundo plano) |
 | Desinstalar | "Aplicativos instalados" do Windows → **AtendePrint** |
 
 Para diagnosticar depois de instalado, sem depender de Node.js:
@@ -253,9 +289,12 @@ Para diagnosticar depois de instalado, sem depender de Node.js:
 
 ```powershell
 Set-Location printer-agent
-npm.cmd install
+npm install          # só na primeira vez
 ./build-windows.ps1
 ```
+
+> Se o `npm` não estiver no PATH (Node portátil), o `build-windows.ps1` usa as dependências já
+> instaladas em `node_modules` em vez de falhar.
 
 O arquivo será `printer-agent/dist/AtendePrint.exe`. Coloque o `config.json` ao lado dele
 (o `build-windows.ps1` copia o `config.sample.json` apenas se o `config.json` ainda não existir).
@@ -290,4 +329,15 @@ Alternativa sem instalador:
 | `Nao foi possivel abrir a impressora 'X'` | Nome diferente do registrado no Windows, ou impressora desligada |
 | O agente grava arquivos `.txt` | `mode` está como `virtual` |
 | Cupom cortado nas laterais | `columns` incompatível com a largura do papel |
+| Cupom sobrando papel em branco ou cortando o rodapé | Ajuste **Comprimento/altura** na tela Impressão (`0` = do tamanho do pedido) |
+| Painel mostra "agente offline" | O `AtendePrint.exe` não está rodando no PC, ou a `apiUrl` do `config.json` está errada |
+| Painel não lista nenhuma impressora | Serviço `Spooler` parado, nenhuma impressora instalada, ou a VPS ainda não tem as rotas novas |
+| Impressora aparece no painel mas marcada como "outra" | Ela não está em porta USB (ex.: `PORTPROMPT:`, `SHRFAX:`) — o agente prefere automaticamente a USB |
 | Pedido ficou "Imprimindo" e sumiu da fila | O agente devolve o pedido para a fila depois de 10 minutos |
+
+Para ver o que o agente está fazendo quando instalado:
+
+```powershell
+Get-Content "$env:LOCALAPPDATA\AtendeAI\AtendePrint\agent.log" -Tail 40
+Get-Process AtendePrint -ErrorAction SilentlyContinue
+```

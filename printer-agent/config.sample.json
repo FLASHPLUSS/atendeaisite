@@ -1,8 +1,9 @@
 {
   "apiUrl": "https://www.anota.ai.venusdev.xyz",
   "mode": "usb",
-  "printerName": "COLE_AQUI_O_NOME_EXATO_DA_IMPRESSORA",
+  "printerName": "",
   "columns": 42,
+  "maxLines": 0,
   "pollSeconds": 5,
   "printerHost": "",
   "printerPort": 9100

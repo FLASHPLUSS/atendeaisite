@@ -20,7 +20,12 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
-foreach ($nodeDir in @("$env:ProgramFiles\nodejs", "${env:ProgramFiles(x86)}\nodejs")) {
+foreach ($nodeDir in @(
+  "$env:ProgramFiles\nodejs",
+  "${env:ProgramFiles(x86)}\nodejs",
+  (Join-Path $env:LOCALAPPDATA 'Programs\nodejs'),
+  (Join-Path $env:USERPROFILE '.tizen-extension-platform\server\runtime')
+)) {
   if ((Test-Path "$nodeDir\node.exe") -and ($env:PATH -notlike "*$nodeDir*")) {
     $env:PATH = "$nodeDir;$env:PATH"
   }
@@ -83,8 +88,8 @@ Write-Host 'Aplicando icone e informacoes de versao no binario base...'
   --set-version-string 'LegalCopyright' 'AtendeAI' `
   --set-version-string 'OriginalFilename' 'AtendePrint.exe' `
   --set-version-string 'InternalName' 'AtendePrint' `
-  --set-file-version '2.0.0.0' `
-  --set-product-version '2.0.0.0'
+  --set-file-version '3.0.0.0' `
+  --set-product-version '3.0.0.0'
 if ($LASTEXITCODE -ne 0) { throw "rcedit falhou com o codigo $LASTEXITCODE" }
 
 $fvi = (Get-Item $base).VersionInfo
