@@ -740,6 +740,12 @@ function bindSettings() {
     const layoutInput = printerSection.querySelector('#printer-layout');
     const previewBox = printerSection.querySelector('#printer-layout-preview');
     const tokensBox = printerSection.querySelector('#printer-tokens');
+    const gutterBox = printerSection.querySelector('#printer-layout-gutter');
+    const statsBox = printerSection.querySelector('#printer-layout-stats');
+    const resetButton = printerSection.querySelector('#printer-layout-reset');
+    const presetsBox = printerSection.querySelector('#printer-paper-presets');
+    const previewStage = printerSection.querySelector('#printer-preview-stage');
+    const previewSize = printerSection.querySelector('#printer-preview-size');
     const detectedList = printerSection.querySelector('#printer-detected-list');
     const detectedHint = printerSection.querySelector('#printer-detected-hint');
     const statusBox = printerSection.querySelector('#printer-agent-status');
@@ -830,7 +836,22 @@ function bindSettings() {
     const renderPreview = () => {
       const columns = Math.min(Math.max(Number(columnsInput.value) || 42, 20), 80);
       const maxLines = Math.min(Math.max(Number(maxLinesInput.value) || 0, 0), 200);
-      previewBox.textContent = previewLayout(layoutInput.value || defaultLayout, columns, maxLines) || '(cupom vazio)';
+      const text = previewLayout(layoutInput.value || defaultLayout, columns, maxLines);
+      previewBox.textContent = text || '(cupom vazio)';
+
+      // O papel da pre-visualizacao muda de largura conforme as colunas escolhidas.
+      previewStage.style.setProperty('--receipt-cols', String(columns));
+      const milimetros = Math.abs(columns - 32) <= 2 ? '58 mm' : Math.abs(columns - 42) <= 2 ? '80 mm' : 'largura livre';
+      previewSize.textContent = `${milimetros} · ${columns} colunas`;
+
+      // Numeracao das linhas: quanto mais linhas, mais alto fica o cupom.
+      const lineCount = layoutInput.value.split('\n').length;
+      const semMarcadores = layoutInput.value.replace(/\{\{[a-z]+\}\}/gi, '').replace(/\s+/g, ' ').trim().length;
+      statsBox.textContent = `${lineCount} ${lineCount === 1 ? 'linha' : 'linhas'} · ${semMarcadores} ${semMarcadores === 1 ? 'caractere próprio' : 'caracteres próprios'}`;
+
+      gutterBox.innerHTML = Array.from({ length: Math.max(lineCount, 1) }, (_, index) => `<span>${index + 1}</span>`).join('');
+      gutterBox.scrollTop = layoutInput.scrollTop;
+      presetsBox.querySelectorAll('[data-columns]').forEach((button) => button.classList.toggle('is-active', Number(button.dataset.columns) === columns));
     };
 
     const applyPrinter = (printer = {}) => {
@@ -900,7 +921,8 @@ function bindSettings() {
       }
     };
 
-    tokensBox.insertAdjacentHTML('beforeend', tokens.map(([token, label]) => `<button class="printer-token" type="button" data-token="{{${token}}}" title="${escapeHtml(label)}">{{${token}}}</button>`).join(''));
+    tokensBox.innerHTML = '<span class="receipt-tokens__label"><i data-lucide="plus"></i> Inserir marcador</span>'
+      + tokens.map(([token, label]) => `<button class="receipt-token" type="button" data-token="{{${token}}}" title="${escapeHtml(label)}"><span>{{${token}}}</span><small>${escapeHtml(label)}</small></button>`).join('');
     tokensBox.querySelectorAll('[data-token]').forEach((button) => button.addEventListener('click', () => {
       const token = button.dataset.token;
       const start = layoutInput.selectionStart ?? layoutInput.value.length;
@@ -910,6 +932,21 @@ function bindSettings() {
       layoutInput.selectionStart = layoutInput.selectionEnd = start + token.length;
       renderPreview();
     }));
+
+    // Modelos de bobina: o mais comum e 80 mm (42 colunas).
+    presetsBox.querySelectorAll('[data-columns]').forEach((button) => button.addEventListener('click', () => {
+      columnsInput.value = button.dataset.columns;
+      renderPreview();
+    }));
+
+    resetButton.addEventListener('click', () => {
+      layoutInput.value = defaultLayout;
+      renderPreview();
+      layoutInput.focus();
+    });
+
+    // A numeracao das linhas acompanha a rolagem do editor.
+    layoutInput.addEventListener('scroll', () => { gutterBox.scrollTop = layoutInput.scrollTop; });
 
     layoutInput.value = stored.layout || defaultLayout;
     [columnsInput, maxLinesInput].forEach((input) => input.addEventListener('input', renderPreview));

@@ -1,0 +1,17 @@
+redesign da tela de impressora e editor do comprovante
+
+- Tela Configuracoes > Impressao reconstruida com a linguagem visual
+  "printer-card": cards com icone, titulo e descricao, status do agente,
+  lista de impressoras detectadas e presets de bobina (58/80 mm).
+- Editor do comprovante em duas colunas: editor monoespaçado com numeracao
+  de linhas sincronizada a rolagem/cursor e pre-visualizacao fiel do cupom
+  em papel de bobina com borda serrilhada.
+- Marcadores clicaveis ({{loja}}, {{pedido}}, {{itens}}, {{total}} ...)
+  que inserem no ponto do cursor, contador de linhas/caracteres proprios
+  e botao Padrao para restaurar o modelo.
+- Ajustes avancados (modo, impressora, host e porta) movidos para um
+  bloco <details> recolhivel, deixando a tela limpa por padrao.
+- Correcoes de responsividade: grid auto-fit com min(342px, 100%),
+  barra do painel com quebra de linha, papel de bobina mantendo a largura
+  fisica real e rolagem horizontal na moldura em telas estreitas.
+- Tema claro: contrapartes .theme-light para todos os novos componentes.

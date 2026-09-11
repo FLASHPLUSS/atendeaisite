@@ -20,35 +20,69 @@ export function configuracoesView() {
                 <div class="settings-section__header"><div><h2>Impressão de pedidos</h2><p>O agente roda em segundo plano no computador do restaurante e envia para esta tela as impressoras ligadas na USB.</p></div><span class="settings-avatar settings-avatar--blue"><i data-lucide="printer"></i></span></div>
                 <div class="printer-agent-status" id="printer-agent-status" data-state="loading"><i></i><span id="printer-agent-status-text">Procurando o agente instalado neste computador...</span></div>
 
-                <div class="printer-block">
-                  <div class="printer-block__header"><div><h3>Impressora conectada</h3><p id="printer-detected-hint">A lista abaixo vem do agente instalado no computador do restaurante.</p></div><button class="filter-button" id="printer-refresh-button" type="button"><i data-lucide="refresh-cw"></i> Atualizar lista</button></div>
+                <section class="printer-card">
+                  <header class="printer-card__head">
+                    <span class="printer-card__icon"><i data-lucide="printer"></i></span>
+                    <div class="printer-card__copy"><h3>Impressora conectada</h3><p id="printer-detected-hint">A lista abaixo vem do agente instalado no computador do restaurante.</p></div>
+                    <button class="printer-ghost-button" id="printer-refresh-button" type="button"><i data-lucide="refresh-cw"></i> Atualizar</button>
+                  </header>
                   <div class="printer-detected" id="printer-detected-list"><p class="printer-detected__empty">Nenhuma impressora recebida ainda. Ligue a impressora na USB e abra o AtendePrint neste computador.</p></div>
-                </div>
+                </section>
 
-                <div class="printer-block">
-                  <div class="printer-block__header"><div><h3>Tamanho do cupom</h3><p>Quantas colunas e quantas linhas o comprovante deve ter.</p></div></div>
+                <section class="printer-card">
+                  <header class="printer-card__head">
+                    <span class="printer-card__icon"><i data-lucide="ruler"></i></span>
+                    <div class="printer-card__copy"><h3>Tamanho do papel</h3><p>Escolha o modelo da bobina e, se quiser, limite a quantidade de linhas do cupom.</p></div>
+                  </header>
+                  <div class="printer-paper-presets" id="printer-paper-presets">
+                    <button class="paper-preset" type="button" data-columns="32"><strong>58 mm</strong><small>32 colunas · bobina estreita</small></button>
+                    <button class="paper-preset" type="button" data-columns="42"><strong>80 mm</strong><small>42 colunas · bobina padrão</small></button>
+                  </div>
                   <div class="printer-fields">
-                    <label>Largura (colunas)<input id="printer-columns" type="number" min="20" max="80" value="42" /><small>58 mm = 32 colunas · 80 mm = 42 colunas</small></label>
-                    <label>Comprimento / altura (linhas)<input id="printer-max-lines" type="number" min="0" max="200" value="0" /><small>Use 0 para o cupom ficar do tamanho do pedido</small></label>
-                    <label>Intervalo de busca (segundos)<input id="printer-poll" type="number" min="2" max="60" value="5" /></label>
+                    <label>Largura (colunas)<input id="printer-columns" type="number" min="20" max="80" value="42" /><small>58 mm usa 32 · 80 mm usa 42</small></label>
+                    <label>Altura (linhas)<input id="printer-max-lines" type="number" min="0" max="200" value="0" /><small>0 deixa o cupom do tamanho do pedido</small></label>
+                    <label>Buscar pedidos a cada<input id="printer-poll" type="number" min="2" max="60" value="5" /><small>em segundos</small></label>
                   </div>
-                </div>
+                </section>
 
-                <div class="printer-block">
-                  <div class="printer-block__header"><div><h3>Layout do comprovante</h3><p>Escreva o cupom usando os marcadores abaixo. A pré-visualização usa a largura configurada.</p></div></div>
-                  <div class="printer-layout">
-                    <label class="printer-layout__editor"><span>Editor do comprovante</span><textarea id="printer-layout" rows="12" spellcheck="false"></textarea></label>
-                    <div class="printer-layout__preview"><span>Pré-visualização</span><pre id="printer-layout-preview"></pre></div>
+                <section class="printer-card printer-card--designer">
+                  <header class="printer-card__head">
+                    <span class="printer-card__icon"><i data-lucide="receipt-text"></i></span>
+                    <div class="printer-card__copy"><h3>Comprovante</h3><p>Monte o cupom linha por linha usando os marcadores. A pré-visualização mostra exatamente o que sai no papel.</p></div>
+                  </header>
+                  <div class="receipt-designer">
+                    <div class="receipt-editor">
+                      <div class="receipt-panel__bar">
+                        <span class="receipt-panel__title"><i data-lucide="pencil-line"></i> Modelo do comprovante</span>
+                        <span class="receipt-panel__meta" id="printer-layout-stats">—</span>
+                        <button class="receipt-reset" id="printer-layout-reset" type="button" title="Voltar ao modelo de fábrica"><i data-lucide="rotate-ccw"></i> Padrão</button>
+                      </div>
+                      <div class="receipt-editor__field">
+                        <div class="receipt-editor__gutter" id="printer-layout-gutter" aria-hidden="true">1</div>
+                        <textarea id="printer-layout" rows="14" spellcheck="false" aria-label="Modelo do comprovante"></textarea>
+                      </div>
+                      <div class="receipt-tokens" id="printer-tokens"></div>
+                    </div>
+                    <div class="receipt-preview">
+                      <div class="receipt-panel__bar">
+                        <span class="receipt-panel__title"><i data-lucide="eye"></i> Pré-visualização</span>
+                        <span class="receipt-panel__meta" id="printer-preview-size">80 mm · 42 colunas</span>
+                      </div>
+                      <div class="receipt-preview__stage" id="printer-preview-stage">
+                        <div class="receipt-preview__paper"><pre id="printer-layout-preview"></pre></div>
+                      </div>
+                    </div>
                   </div>
-                  <div class="printer-tokens" id="printer-tokens"><span class="printer-tokens__label">Inserir:</span></div>
-                </div>
+                </section>
 
-                <details class="printer-advanced">
-                  <summary>Configurações avançadas (rede, modo de teste e nome da impressora)</summary>
-                  <div class="settings-form printer-settings-form"><label>Modo de impressão<select id="printer-mode"><option value="virtual">Virtual (teste sem impressora)</option><option value="usb">USB / Windows (impressora instalada no PC)</option><option value="escpos">ESC/POS por rede</option></select></label><label class="printer-settings-name">Nome da impressora no Windows<input id="printer-name" type="text" placeholder="Ex.: Elgin i9" /></label><label class="printer-settings-host">IP ou hostname da impressora<input id="printer-host" type="text" placeholder="Ex.: 192.168.1.50" /></label><label>Porta da impressora<input id="printer-port" type="number" min="1" max="65535" value="9100" /></label></div>
-                </details>
+                <section class="printer-card printer-card--advanced">
+                  <details class="printer-advanced">
+                    <summary><span class="printer-advanced__label"><i data-lucide="sliders-horizontal"></i> Ajustes avançados</span><small>Conexão, porta e modo de teste</small></summary>
+                    <div class="settings-form printer-settings-form"><label>Modo de impressão<select id="printer-mode"><option value="virtual">Virtual (teste sem impressora)</option><option value="usb">USB / Windows (impressora instalada no PC)</option><option value="escpos">ESC/POS por rede</option></select></label><label class="printer-settings-name">Nome da impressora no Windows<input id="printer-name" type="text" placeholder="Ex.: Elgin i9" /></label><label class="printer-settings-host">IP ou hostname da impressora<input id="printer-host" type="text" placeholder="Ex.: 192.168.1.50" /></label><label>Porta da impressora<input id="printer-port" type="number" min="1" max="65535" value="9100" /></label></div>
+                  </details>
+                </section>
 
-                <div class="settings-section__footer"><small id="printer-save-feedback">A impressora em uso é enviada pelo agente a cada poucos segundos.</small><div class="printer-actions"><button class="filter-button" id="printer-test-button" type="button"><i data-lucide="send"></i> Criar pedido de teste</button><button class="settings-save" id="printer-save-button" type="button">Salvar configuração</button></div></div>
+                <div class="settings-section__footer"><small id="printer-save-feedback">A impressora em uso é enviada pelo agente a cada poucos segundos.</small><div class="printer-actions"><button class="printer-ghost-button" id="printer-test-button" type="button"><i data-lucide="send"></i> Criar pedido de teste</button><button class="settings-save" id="printer-save-button" type="button"><i data-lucide="check"></i> Salvar configuração</button></div></div>
               </section>
               <section class="panel settings-section settings-notifications" hidden><div class="settings-section__header"><div><h2>Notificações</h2><p>Escolha quais alertas sua equipe deve receber.</p></div><span class="settings-avatar settings-avatar--blue"><i data-lucide="bell-ring"></i></span></div><div class="settings-options"><label class="toggle-option"><span><strong>Novos pedidos</strong><small>Avise a equipe assim que um pedido chegar.</small></span><input type="checkbox" checked /><i></i></label><label class="toggle-option"><span><strong>Pedidos atrasados</strong><small>Notifique quando o tempo estimado for ultrapassado.</small></span><input type="checkbox" checked /><i></i></label><label class="toggle-option"><span><strong>Resumo diário</strong><small>Receba o fechamento da operação no fim do dia.</small></span><input type="checkbox" /><i></i></label><label class="toggle-option"><span><strong>Atualizações do AtendeAI</strong><small>Receba novidades e melhorias do sistema.</small></span><input type="checkbox" /><i></i></label></div></section>
               <section class="panel settings-section settings-appearance" hidden><div class="settings-section__header"><div><h2>Tema e visual</h2><p>Escolha como o AtendeAI aparece para você.</p></div><span class="settings-appearance__preview"><i data-lucide="moon"></i></span></div><div class="theme-options"><button class="theme-option is-selected" type="button" data-theme-choice="dark"><span class="theme-preview theme-preview--dark"><i></i><i></i><i></i></span><strong>Dark</strong><small>Ideal para operação</small></button><button class="theme-option" type="button" data-theme-choice="light"><span class="theme-preview theme-preview--light"><i></i><i></i><i></i></span><strong>Claro</strong><small>Mais luminoso</small></button><button class="theme-option" type="button" data-theme-choice="system"><span class="theme-preview theme-preview--system"><i></i><i></i><i></i></span><strong>Sistema</strong><small>Segue seu dispositivo</small></button></div></section>
