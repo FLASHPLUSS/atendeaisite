@@ -2,7 +2,13 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 # O terminal do VS Code as vezes tem um PATH antigo sem o Node: garante o caminho padrao.
-foreach ($nodeDir in @("$env:ProgramFiles\nodejs", "${env:ProgramFiles(x86)}\nodejs")) {
+# A ultima opcao e o runtime embutido que existe quando o Node nao esta instalado globalmente.
+foreach ($nodeDir in @(
+  "$env:ProgramFiles\nodejs",
+  "${env:ProgramFiles(x86)}\nodejs",
+  (Join-Path $env:LOCALAPPDATA 'Programs\nodejs'),
+  (Join-Path $env:USERPROFILE '.tizen-extension-platform\server\runtime')
+)) {
   if ((Test-Path "$nodeDir\node.exe") -and ($env:PATH -notlike "*$nodeDir*")) {
     $env:PATH = "$nodeDir;$env:PATH"
   }
@@ -10,10 +16,17 @@ foreach ($nodeDir in @("$env:ProgramFiles\nodejs", "${env:ProgramFiles(x86)}\nod
 
 if (-not (Test-Path 'dist\AtendePrint.exe')) {
   Write-Host 'Gerando o executavel do agente com o pkg...'
-  & npm.cmd install --no-audit --no-fund
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'gerar-icone.ps1')
-  & npm.cmd run build:windows
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'aplicar-icone-exe.ps1')
+  # O npm pode nao existir (Node portatil): nesse caso as dependencias ja estao instaladas.
+  $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
+  if ($npm) {
+    & $npm.Source install --no-audit --no-fund
+  } elseif (Test-Path 'node_modules') {
+    Write-Host 'npm nao encontrado: usando as dependencias ja instaladas.'
+  } else {
+    throw 'npm nao encontrado e node_modules nao existe. Instale o Node.js (que inclui o npm).'
+  }
+  # O build-windows.ps1 cuida do icone, do binario base com PKG_NODE_PATH e do empacotamento.
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'build-windows.ps1')
 }
 
 $compiler = Get-Command iscc.exe -ErrorAction SilentlyContinue
